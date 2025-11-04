@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import type { Resource } from '../types';
-import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../services/supabase';
 import { getExpiryPresets, formatDateTime } from '../utils/dateUtils';
 import { addHours } from 'date-fns';
@@ -14,12 +13,12 @@ interface BookingModalProps {
 type ModalMode = 'view' | 'book' | 'extend' | 'edit';
 
 export const BookingModal = ({ resource, onClose, onSuccess }: BookingModalProps) => {
-  const { user, isAdmin } = useAuth();
   const [mode, setMode] = useState<ModalMode>(resource.status === 'FREE' ? 'book' : 'view');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Form state
+  const [bookedBy, setBookedBy] = useState(resource.current_booking?.booked_by || '');
   const [branch, setBranch] = useState(resource.current_booking?.branch || '');
   const [notes, setNotes] = useState(resource.current_booking?.notes || '');
   const [buildLink, setBuildLink] = useState(resource.current_booking?.build_link || '');
@@ -30,10 +29,13 @@ export const BookingModal = ({ resource, onClose, onSuccess }: BookingModalProps
   );
 
   const presets = getExpiryPresets();
-  const isOwner = resource.current_booking?.user_id === user?.id;
-  const canModify = isOwner || isAdmin;
 
   const handleBook = async () => {
+    if (!bookedBy.trim()) {
+      setError('Your name is required');
+      return;
+    }
+
     if (!branch.trim()) {
       setError('Branch name is required');
       return;
@@ -48,7 +50,7 @@ export const BookingModal = ({ resource, onClose, onSuccess }: BookingModalProps
         .from('bookings')
         .insert({
           resource_id: resource.id,
-          user_id: user?.id,
+          booked_by: bookedBy.trim(),
           branch: branch.trim(),
           notes: notes.trim() || null,
           build_link: buildLink.trim() || null,
@@ -65,7 +67,7 @@ export const BookingModal = ({ resource, onClose, onSuccess }: BookingModalProps
         booking_id: booking.id,
         action: 'BOOK',
         resource_id: resource.id,
-        user_id: user?.id,
+        booked_by: bookedBy.trim(),
         branch: branch.trim(),
         notes: notes.trim() || null,
         build_link: buildLink.trim() || null,
@@ -102,7 +104,7 @@ export const BookingModal = ({ resource, onClose, onSuccess }: BookingModalProps
         booking_id: resource.current_booking.id,
         action: 'RELEASE',
         resource_id: resource.id,
-        user_id: user?.id,
+        booked_by: resource.current_booking.booked_by,
         branch: resource.current_booking.branch,
         notes: resource.current_booking.notes || null,
         build_link: resource.current_booking.build_link || null,
@@ -138,7 +140,7 @@ export const BookingModal = ({ resource, onClose, onSuccess }: BookingModalProps
         booking_id: resource.current_booking.id,
         action: 'EXTEND',
         resource_id: resource.id,
-        user_id: user?.id,
+        booked_by: resource.current_booking.booked_by,
         branch: resource.current_booking.branch,
         notes: resource.current_booking.notes || null,
         build_link: resource.current_booking.build_link || null,
@@ -176,7 +178,7 @@ export const BookingModal = ({ resource, onClose, onSuccess }: BookingModalProps
         booking_id: resource.current_booking.id,
         action: 'EDIT',
         resource_id: resource.id,
-        user_id: user?.id,
+        booked_by: resource.current_booking.booked_by,
         branch: resource.current_booking.branch,
         notes: notes.trim() || null,
         build_link: buildLink.trim() || null,
@@ -239,7 +241,7 @@ export const BookingModal = ({ resource, onClose, onSuccess }: BookingModalProps
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700">Booked By</label>
-                <p className="mt-1 text-sm text-gray-900">{resource.current_booking.user?.name}</p>
+                <p className="mt-1 text-sm text-gray-900">{resource.current_booking.booked_by}</p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700">Branch</label>
@@ -264,40 +266,36 @@ export const BookingModal = ({ resource, onClose, onSuccess }: BookingModalProps
                     href={resource.current_booking.build_link}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="mt-1 text-sm text-blue-600 hover:text-blue-800"
+                    className="mt-1 text-sm text-blue-600 hover:text-blue-800 break-all"
                   >
                     {resource.current_booking.build_link}
                   </a>
                 </div>
               )}
 
-              <div className="mt-5 sm:mt-6 sm:grid sm:grid-cols-2 sm:gap-3">
-                {canModify && (
-                  <>
-                    <button
-                      onClick={handleRelease}
-                      disabled={loading}
-                      className="inline-flex justify-center w-full rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:text-sm disabled:opacity-50"
-                    >
-                      {loading ? 'Releasing...' : 'Release'}
-                    </button>
-                    <button
-                      onClick={() => setMode('extend')}
-                      className="inline-flex justify-center w-full rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:text-sm"
-                    >
-                      Extend
-                    </button>
-                    <button
-                      onClick={() => setMode('edit')}
-                      className="mt-3 inline-flex justify-center w-full rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:text-sm sm:col-span-2 sm:mt-0"
-                    >
-                      Edit Details
-                    </button>
-                  </>
-                )}
+              <div className="mt-5 sm:mt-6 flex flex-col gap-2">
+                <button
+                  onClick={handleRelease}
+                  disabled={loading}
+                  className="inline-flex justify-center w-full rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:text-sm disabled:opacity-50"
+                >
+                  {loading ? 'Releasing...' : 'Release'}
+                </button>
+                <button
+                  onClick={() => setMode('extend')}
+                  className="inline-flex justify-center w-full rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:text-sm"
+                >
+                  Extend
+                </button>
+                <button
+                  onClick={() => setMode('edit')}
+                  className="inline-flex justify-center w-full rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:text-sm"
+                >
+                  Edit Details
+                </button>
                 <button
                   onClick={onClose}
-                  className="mt-3 inline-flex justify-center w-full rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:text-sm sm:col-span-2 sm:mt-0"
+                  className="inline-flex justify-center w-full rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:text-sm"
                 >
                   Close
                 </button>
@@ -308,6 +306,19 @@ export const BookingModal = ({ resource, onClose, onSuccess }: BookingModalProps
           {/* Book Mode */}
           {mode === 'book' && (
             <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  Your Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={bookedBy}
+                  onChange={(e) => setBookedBy(e.target.value)}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                  placeholder="John Doe"
+                />
+              </div>
+
               <div>
                 <label className="block text-sm font-medium text-gray-700">
                   Branch Name <span className="text-red-500">*</span>
@@ -377,7 +388,7 @@ export const BookingModal = ({ resource, onClose, onSuccess }: BookingModalProps
               <div className="mt-5 sm:mt-6 sm:grid sm:grid-cols-2 sm:gap-3">
                 <button
                   onClick={handleBook}
-                  disabled={loading || !branch.trim()}
+                  disabled={loading || !branch.trim() || !bookedBy.trim()}
                   className="inline-flex justify-center w-full rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:text-sm disabled:opacity-50"
                 >
                   {loading ? 'Booking...' : 'Book'}

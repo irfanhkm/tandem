@@ -1,14 +1,3 @@
-// User types
-export interface User {
-  id: string;
-  email: string;
-  name: string;
-  avatar_url?: string;
-  role: 'USER' | 'ADMIN';
-  created_at: string;
-  last_login?: string;
-}
-
 // Resource types
 export interface Resource {
   id: string;
@@ -24,14 +13,13 @@ export interface Resource {
 export interface Booking {
   id: string;
   resource_id: string;
-  user_id: string;
+  booked_by: string;  // User's name (no auth)
   branch: string;
   notes?: string;
   build_link?: string;
   expires_at: string;
   created_at: string;
   released_at?: string;
-  user?: User;
   resource?: Resource;
 }
 
@@ -43,7 +31,7 @@ export interface BookingHistory {
   booking_id?: string;
   action: BookingAction;
   resource_id: string;
-  user_id: string;
+  booked_by: string;  // User's name (no auth)
   branch: string;
   notes?: string;
   build_link?: string;
@@ -55,6 +43,7 @@ export interface BookingHistory {
 // Form types
 export interface BookingFormData {
   resource_id: string;
+  booked_by: string;  // User enters their name
   branch: string;
   notes?: string;
   build_link?: string;

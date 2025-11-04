@@ -87,7 +87,7 @@ export const ResourceTable = ({ resources, onResourceClick }: ResourceTableProps
               </td>
               <td className="px-6 py-4 whitespace-nowrap">
                 <div className="text-sm text-gray-900">
-                  {resource.current_booking?.user?.name || '-'}
+                  {resource.current_booking?.booked_by || '-'}
                 </div>
               </td>
               <td className="px-6 py-4 whitespace-nowrap">

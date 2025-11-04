@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../services/supabase';
 import type { Resource } from '../types';
 import { ResourceTable } from '../components/ResourceTable';
@@ -7,7 +6,6 @@ import { BookingModal } from '../components/BookingModal';
 import { Header } from '../components/Header';
 
 export const Dashboard = () => {
-  const { user, loading: authLoading } = useAuth();
   const [resources, setResources] = useState<Resource[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedResource, setSelectedResource] = useState<Resource | null>(null);
@@ -16,11 +14,9 @@ export const Dashboard = () => {
   const [availableLabels, setAvailableLabels] = useState<string[]>([]);
 
   useEffect(() => {
-    if (!authLoading && user) {
-      fetchResources();
-      subscribeToChanges();
-    }
-  }, [user, authLoading]);
+    fetchResources();
+    subscribeToChanges();
+  }, []);
 
   const fetchResources = async () => {
     try {
@@ -33,13 +29,10 @@ export const Dashboard = () => {
 
       if (resourcesError) throw resourcesError;
 
-      // Fetch active bookings
+      // Fetch active bookings (no user join, just booked_by name)
       const { data: bookingsData, error: bookingsError } = await supabase
         .from('bookings')
-        .select(`
-          *,
-          user:users(id, name, email, avatar_url)
-        `)
+        .select('*')
         .is('released_at', null)
         .gt('expires_at', new Date().toISOString());
 
@@ -125,7 +118,7 @@ export const Dashboard = () => {
     return resource.labels?.split(',').map((l) => l.trim()).includes(labelFilter);
   });
 
-  if (authLoading || loading) {
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>

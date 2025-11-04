@@ -1,12 +1,11 @@
 import { useEffect, useState } from 'react';
-import { useAuth } from '../hooks/useAuth';
-import { Navigate } from 'react-router-dom';
+
 import { supabase } from '../services/supabase';
 import type { Resource, ResourceFormData } from '../types';
 import { Header } from '../components/Header';
 
 export const Admin = () => {
-  const { user, loading: authLoading, isAdmin } = useAuth();
+  
   const [resources, setResources] = useState<Resource[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -19,10 +18,10 @@ export const Admin = () => {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    if (!authLoading && user) {
+    if (true) {
       fetchResources();
     }
-  }, [user, authLoading]);
+  }, []);
 
   const fetchResources = async () => {
     try {
@@ -144,16 +143,12 @@ export const Admin = () => {
     setError(null);
   };
 
-  if (authLoading || loading) {
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
       </div>
     );
-  }
-
-  if (!isAdmin) {
-    return <Navigate to="/" replace />;
   }
 
   return (
