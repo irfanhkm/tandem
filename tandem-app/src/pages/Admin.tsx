@@ -3,15 +3,14 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../services/supabase';
 import type { Resource, ResourceFormData } from '../types';
 import { Header } from '../components/Header';
-import CloudBuildHistory from '../components/CloudBuildHistory';
-
-type TabType = 'resources' | 'cloud-build';
+import IntegrationSettings from '../components/IntegrationSettings';
+import { GCPCloudBuildIntegration } from '../services/gcpService';
 
 export const Admin = () => {
-  const [activeTab, setActiveTab] = useState<TabType>('resources');
   const [resources, setResources] = useState<Resource[]>([]);
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
+  const [showIntegrations, setShowIntegrations] = useState(false);
   const [editingResource, setEditingResource] = useState<Resource | null>(null);
   const [formData, setFormData] = useState<ResourceFormData>({
     name: '',
@@ -205,46 +204,65 @@ export const Admin = () => {
 
       <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         <div className="px-4 sm:px-0">
-          {/* Tab Navigation */}
-          <div className="border-b border-gray-200 mb-6">
-            <nav className="-mb-px flex space-x-8">
-              <button
-                onClick={() => setActiveTab('resources')}
-                className={`${
-                  activeTab === 'resources'
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
-              >
-                Resources
-              </button>
-              <button
-                onClick={() => setActiveTab('cloud-build')}
-                className={`${
-                  activeTab === 'cloud-build'
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
-              >
-                Cloud Build
-              </button>
-            </nav>
-          </div>
-
-          {/* Resources Tab */}
-          {activeTab === 'resources' && (
-            <>
-              <div className="flex justify-between items-center mb-6">
-                <h1 className="text-2xl font-bold text-gray-900">Resources Management</h1>
-                {!showForm && (
+          {/* Header */}
+          <div className="flex justify-between items-center mb-6">
+            <h1 className="text-2xl font-bold text-gray-900">Admin Panel - Resources</h1>
+            <div className="flex space-x-2">
+              {!showForm && !showIntegrations && (
+                <>
+                  <button
+                    onClick={() => setShowIntegrations(!showIntegrations)}
+                    className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  >
+                    ⚙️ Integrations
+                  </button>
                   <button
                     onClick={() => setShowForm(true)}
                     className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                   >
-                    Add Resource
+                    + Add Resource
                   </button>
-                )}
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Integrations Section */}
+          {showIntegrations && (
+            <div className="mb-6">
+              <div className="flex justify-between items-center mb-4">
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900">External Integrations</h2>
+                  <p className="text-sm text-gray-600">
+                    Connect external services to automatically sync resources
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowIntegrations(false)}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  ✕ Close
+                </button>
               </div>
+
+              <div className="space-y-4">
+                <IntegrationSettings
+                  provider={GCPCloudBuildIntegration}
+                  onSyncComplete={(result) => {
+                    if (result.success > 0) {
+                      fetchResources();
+                    }
+                  }}
+                  onConfigChange={() => {
+                    // Optionally refresh or update UI
+                  }}
+                />
+                {/* Future integrations can be added here */}
+                {/* <IntegrationSettings provider={AWSCodeBuildIntegration} /> */}
+                {/* <IntegrationSettings provider={AzurePipelinesIntegration} /> */}
+              </div>
+            </div>
+          )}
 
           {error && (
             <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
@@ -390,13 +408,6 @@ export const Admin = () => {
                   </tbody>
                 </table>
               </div>
-            </>
-          )}
-
-          {/* Cloud Build Tab */}
-          {activeTab === 'cloud-build' && (
-            <CloudBuildHistory autoRefresh={true} refreshInterval={30000} />
-          )}
         </div>
       </main>
     </div>

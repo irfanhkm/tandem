@@ -1,36 +1,61 @@
 // Google Cloud Build Integration Service
-// This service fetches build triggers and build information from GCP
-
-// Note: This requires Google Cloud Build API access and authentication
-// Setup instructions:
-// 1. Enable Cloud Build API in GCP Console
-// 2. Create a service account with Cloud Build Viewer role
-// 3. Download service account key and set VITE_GCP_SERVICE_ACCOUNT_KEY
-// 4. Set VITE_GCP_PROJECT_ID in your .env file
-
-// IMPORTANT: Google Cloud libraries are Node.js-only and cannot run in browsers
-// This code requires a backend proxy in production. See CLOUD_BUILD_SETUP.md
+// This service implements the IntegrationProvider interface for GCP Cloud Build
 
 import { supabase } from './supabase';
+import type { IntegrationProvider, ConfigField, SyncResult } from '../types/integrations';
+import { getIntegrationConfig } from '../types/integrations';
 
-const GCP_PROJECT_ID = import.meta.env.VITE_GCP_PROJECT_ID;
-const GCP_SERVICE_ACCOUNT_KEY = import.meta.env.VITE_GCP_SERVICE_ACCOUNT_KEY;
+// Default GCP Project ID - can be overridden by user
+const DEFAULT_GCP_PROJECT_ID = 'your-gcp-project-id';
 
 // Type definition for CloudBuildClient
 type CloudBuildClient = any;
 
-// Initialize Cloud Build client (browser-safe)
+// Cloud Build client cache
 let cloudBuildClient: CloudBuildClient | null = null;
 let clientInitError: string | null = null;
+let lastConfigHash: string | null = null;
 
+// Get configuration from localStorage
+function getGCPConfig() {
+  const config = getIntegrationConfig('gcp-cloud-build');
+  if (!config || !config.enabled) {
+    return { projectId: null, serviceAccountKey: null };
+  }
+
+  return {
+    projectId: config.settings.projectId || DEFAULT_GCP_PROJECT_ID,
+    serviceAccountKey: config.settings.serviceAccountKey || null,
+  };
+}
+
+// Initialize Cloud Build client (browser-safe)
 async function getCloudBuildClient(): Promise<CloudBuildClient | null> {
-  if (clientInitError) {
-    console.warn('Cloud Build client previously failed to initialize:', clientInitError);
+  const { projectId, serviceAccountKey } = getGCPConfig();
+
+  if (!projectId || projectId === 'your-gcp-project-id') {
+    console.warn('GCP Project ID not configured. Please configure Cloud Build integration.');
     return null;
   }
 
-  if (!GCP_PROJECT_ID) {
-    console.error('GCP_PROJECT_ID not configured');
+  if (!serviceAccountKey) {
+    console.warn('Service Account Key not configured. Please configure Cloud Build integration.');
+    return null;
+  }
+
+  // Create a hash of current config to detect changes
+  const configHash = projectId + ':' + serviceAccountKey.substring(0, 50);
+
+  // Reset client if config changed
+  if (lastConfigHash && lastConfigHash !== configHash) {
+    cloudBuildClient = null;
+    clientInitError = null;
+  }
+
+  lastConfigHash = configHash;
+
+  if (clientInitError) {
+    console.warn('Cloud Build client previously failed to initialize:', clientInitError);
     return null;
   }
 
@@ -40,19 +65,18 @@ async function getCloudBuildClient(): Promise<CloudBuildClient | null> {
       // This will fail in browser environments - that's expected
       const { CloudBuildClient } = await import('@google-cloud/cloudbuild');
 
-      // Parse service account key if provided as JSON string
-      const credentials = GCP_SERVICE_ACCOUNT_KEY
-        ? JSON.parse(GCP_SERVICE_ACCOUNT_KEY)
-        : undefined;
+      // Parse service account key
+      const credentials = JSON.parse(serviceAccountKey);
 
       cloudBuildClient = new CloudBuildClient({
-        projectId: GCP_PROJECT_ID,
+        projectId,
         credentials,
       });
 
-      console.log('Cloud Build client initialized successfully');
+      console.log('Cloud Build client initialized successfully for project:', projectId);
     } catch (error) {
-      const errorMsg = 'Cloud Build integration requires a backend service. See CLOUD_BUILD_SETUP.md';
+      const errorMsg =
+        'Cloud Build integration requires a backend service in production. Currently running in demo mode.';
       clientInitError = errorMsg;
       console.warn(errorMsg, error);
       return null;
@@ -100,9 +124,12 @@ export async function fetchBuildTriggers(): Promise<BuildTrigger[]> {
     return [];
   }
 
+  const { projectId } = getGCPConfig();
+  if (!projectId) return [];
+
   try {
     const [triggers] = await client.listBuildTriggers({
-      projectId: GCP_PROJECT_ID,
+      projectId,
     });
 
     return (triggers || []).map((trigger: any) => ({
@@ -134,9 +161,12 @@ export async function fetchBuildsForTrigger(triggerId: string, limit: number = 1
     return [];
   }
 
+  const { projectId } = getGCPConfig();
+  if (!projectId) return [];
+
   try {
     const [builds] = await client.listBuilds({
-      projectId: GCP_PROJECT_ID,
+      projectId,
       filter: `build_trigger_id="${triggerId}"`,
       pageSize: limit,
     });
@@ -166,9 +196,12 @@ export async function fetchBuildById(buildId: string): Promise<Build | null> {
     return null;
   }
 
+  const { projectId } = getGCPConfig();
+  if (!projectId) return null;
+
   try {
     const [build] = await client.getBuild({
-      projectId: GCP_PROJECT_ID,
+      projectId,
       id: buildId,
     });
 
@@ -199,9 +232,12 @@ export async function fetchAllBuilds(limit: number = 20): Promise<Build[]> {
     return [];
   }
 
+  const { projectId } = getGCPConfig();
+  if (!projectId) return [];
+
   try {
     const [builds] = await client.listBuilds({
-      projectId: GCP_PROJECT_ID,
+      projectId,
       pageSize: limit,
     });
 
@@ -230,12 +266,15 @@ export async function triggerBuild(triggerId: string, branchName: string): Promi
     return null;
   }
 
+  const { projectId } = getGCPConfig();
+  if (!projectId) return null;
+
   try {
     const [operation] = await client.runBuildTrigger({
-      projectId: GCP_PROJECT_ID,
+      projectId,
       triggerId: triggerId,
       source: {
-        projectId: GCP_PROJECT_ID,
+        projectId,
         branchName: branchName,
       },
     });
@@ -371,3 +410,91 @@ export async function syncTriggersToResources(): Promise<{
     return result;
   }
 }
+
+// ==========================================
+// Integration Provider Implementation
+// ==========================================
+
+export const GCPCloudBuildIntegration: IntegrationProvider = {
+  type: 'gcp-cloud-build',
+  name: 'Google Cloud Build',
+  description: 'Sync build triggers from Google Cloud Build as bookable resources',
+
+  isConfigured(): boolean {
+    const config = getIntegrationConfig('gcp-cloud-build');
+    if (!config || !config.enabled) return false;
+
+    const { projectId, serviceAccountKey } = config.settings;
+    return !!(
+      projectId &&
+      projectId !== 'your-gcp-project-id' &&
+      serviceAccountKey &&
+      serviceAccountKey.trim().length > 0
+    );
+  },
+
+  validateConfig(settings: Record<string, any>): { valid: boolean; errors: string[] } {
+    const errors: string[] = [];
+
+    if (!settings.projectId || settings.projectId.trim() === '') {
+      errors.push('Project ID is required');
+    }
+
+    if (
+      settings.projectId === 'your-gcp-project-id' ||
+      settings.projectId === DEFAULT_GCP_PROJECT_ID
+    ) {
+      errors.push('Please enter your actual GCP Project ID');
+    }
+
+    if (!settings.serviceAccountKey || settings.serviceAccountKey.trim() === '') {
+      errors.push('Service Account Key (JSON) is required');
+    } else {
+      try {
+        const parsed = JSON.parse(settings.serviceAccountKey);
+        if (!parsed.type || parsed.type !== 'service_account') {
+          errors.push('Invalid service account key: must be a service account JSON');
+        }
+        if (!parsed.project_id) {
+          errors.push('Invalid service account key: missing project_id');
+        }
+        if (!parsed.private_key) {
+          errors.push('Invalid service account key: missing private_key');
+        }
+      } catch (error) {
+        errors.push('Service Account Key must be valid JSON');
+      }
+    }
+
+    return {
+      valid: errors.length === 0,
+      errors,
+    };
+  },
+
+  async syncResources(): Promise<SyncResult> {
+    return await syncTriggersToResources();
+  },
+
+  getConfigFields(): ConfigField[] {
+    return [
+      {
+        key: 'projectId',
+        label: 'GCP Project ID',
+        type: 'text',
+        placeholder: 'my-project-id',
+        required: true,
+        description: 'Your Google Cloud Platform Project ID',
+      },
+      {
+        key: 'serviceAccountKey',
+        label: 'Service Account Key (JSON)',
+        type: 'textarea',
+        placeholder: '{"type":"service_account","project_id":"...","private_key":"..."}',
+        required: true,
+        description:
+          'Service account JSON key with Cloud Build Viewer role. This is stored temporarily in your browser\'s localStorage.',
+      },
+    ];
+  },
+};
