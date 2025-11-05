@@ -45,7 +45,7 @@ export const BookingForm = ({ resource, onClose, onSuccess }: BookingFormProps) 
       setLoading(true);
       setError(null);
 
-      // Create booking
+      // Create booking - let database handle created_at with default
       const { data: booking, error: bookingError } = await supabase
         .from('bookings')
         .insert({
@@ -55,7 +55,6 @@ export const BookingForm = ({ resource, onClose, onSuccess }: BookingFormProps) 
           notes: notes.trim() || null,
           build_link: buildLink.trim() || null,
           expires_at: expiresAt.toISOString(),
-          created_at: new Date().toISOString(),
         })
         .select()
         .single();
@@ -160,6 +159,11 @@ export const BookingForm = ({ resource, onClose, onSuccess }: BookingFormProps) 
   const handleEdit = async () => {
     if (!resource.current_booking) return;
 
+    if (!branch.trim()) {
+      setError('Branch name is required');
+      return;
+    }
+
     try {
       setLoading(true);
       setError(null);
@@ -168,6 +172,7 @@ export const BookingForm = ({ resource, onClose, onSuccess }: BookingFormProps) 
       await supabase
         .from('bookings')
         .update({
+          branch: branch.trim(),
           notes: notes.trim() || null,
           build_link: buildLink.trim() || null,
         })
@@ -179,7 +184,7 @@ export const BookingForm = ({ resource, onClose, onSuccess }: BookingFormProps) 
         action: 'EDIT',
         resource_id: resource.id,
         booked_by: resource.current_booking.booked_by,
-        branch: resource.current_booking.branch,
+        branch: branch.trim(),
         notes: notes.trim() || null,
         build_link: buildLink.trim() || null,
         expires_at: resource.current_booking.expires_at,
@@ -225,47 +230,89 @@ export const BookingForm = ({ resource, onClose, onSuccess }: BookingFormProps) 
           {/* View Mode */}
           {mode === 'view' && resource.current_booking && (
             <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Status</label>
+              <div className="mb-4">
                 <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
                   🔴 Locked
                 </span>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Booked By</label>
-                <p className="mt-1 text-sm text-gray-900">{resource.current_booking.booked_by}</p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Branch</label>
-                <p className="mt-1 text-sm text-gray-900">{resource.current_booking.branch}</p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Expires At</label>
-                <p className="mt-1 text-sm text-gray-900">
-                  {formatDateTime(resource.current_booking.expires_at)}
-                </p>
-              </div>
-              {resource.current_booking.notes && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Notes</label>
-                  <p className="mt-1 text-sm text-gray-900">{resource.current_booking.notes}</p>
-                </div>
-              )}
-              {resource.current_booking.build_link && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Build Link</label>
-                  <a
-                    href={resource.current_booking.build_link}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="mt-1 text-sm text-blue-600 hover:text-blue-800 break-all"
-                  >
-                    {resource.current_booking.build_link}
-                  </a>
-                </div>
-              )}
 
-              <div className="mt-5 sm:mt-6 flex flex-col gap-2">
+              {/* Details Table */}
+              <div className="border border-gray-200 rounded-md overflow-hidden">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    <tr>
+                      <td className="px-4 py-3 text-sm font-medium text-gray-700 bg-gray-50 w-1/2">
+                        Booked By
+                      </td>
+                      <td className="px-4 py-3 text-sm font-medium text-gray-700 bg-gray-50 w-1/2">
+                        Branch
+                      </td>
+                    </tr>
+                    <tr>
+                      <td className="px-4 py-3 text-sm text-gray-900">
+                        {resource.current_booking.booked_by}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-900">
+                        {resource.current_booking.branch}
+                      </td>
+                    </tr>
+                    <tr>
+                      <td className="px-4 py-3 text-sm font-medium text-gray-700 bg-gray-50">
+                        Expires At
+                      </td>
+                      <td className="px-4 py-3 text-sm font-medium text-gray-700 bg-gray-50">
+                        Notes
+                      </td>
+                    </tr>
+                    <tr>
+                      <td className="px-4 py-3 text-sm text-gray-900">
+                        {formatDateTime(resource.current_booking.expires_at)}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-900">
+                        {resource.current_booking.notes || '-'}
+                      </td>
+                    </tr>
+                    {resource.current_booking.build_link && (
+                      <>
+                        <tr>
+                          <td className="px-4 py-3 text-sm font-medium text-gray-700 bg-gray-50" colSpan={2}>
+                            Build Link
+                          </td>
+                        </tr>
+                        <tr>
+                          <td className="px-4 py-3 text-sm text-gray-900" colSpan={2}>
+                            <a
+                              href={resource.current_booking.build_link}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-blue-600 hover:text-blue-800 break-all"
+                            >
+                              {resource.current_booking.build_link}
+                            </a>
+                          </td>
+                        </tr>
+                      </>
+                    )}
+                    {resource.current_booking.created_at && (
+                      <>
+                        <tr>
+                          <td className="px-4 py-3 text-sm font-medium text-gray-700 bg-gray-50" colSpan={2}>
+                            Created At
+                          </td>
+                        </tr>
+                        <tr>
+                          <td className="px-4 py-3 text-sm text-gray-900" colSpan={2}>
+                            {formatDateTime(resource.current_booking.created_at)}
+                          </td>
+                        </tr>
+                      </>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="mt-5 sm:mt-6 grid grid-cols-2 gap-3">
                 <button
                   onClick={handleRelease}
                   disabled={loading}
@@ -464,8 +511,16 @@ export const BookingForm = ({ resource, onClose, onSuccess }: BookingFormProps) 
           {mode === 'edit' && resource.current_booking && (
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700">Branch</label>
-                <p className="mt-1 text-sm text-gray-500">{resource.current_booking.branch} (cannot be changed)</p>
+                <label className="block text-sm font-medium text-gray-700">
+                  Branch Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={branch}
+                  onChange={(e) => setBranch(e.target.value)}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                  placeholder="feature/new-feature"
+                />
               </div>
 
               <div>
@@ -493,7 +548,7 @@ export const BookingForm = ({ resource, onClose, onSuccess }: BookingFormProps) 
               <div className="mt-5 sm:mt-6 sm:grid sm:grid-cols-2 sm:gap-3">
                 <button
                   onClick={handleEdit}
-                  disabled={loading}
+                  disabled={loading || !branch.trim()}
                   className="inline-flex justify-center w-full rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:text-sm disabled:opacity-50"
                 >
                   {loading ? 'Saving...' : 'Save'}

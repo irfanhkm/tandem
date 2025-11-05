@@ -60,18 +60,15 @@ export const Admin = () => {
           .update({
             name: formData.name.trim(),
             labels: formData.labels?.trim() || null,
-            updated_at: new Date().toISOString(),
           })
           .eq('id', editingResource.id);
 
         if (updateError) throw updateError;
       } else {
-        // Create new resource
+        // Create new resource - let database handle timestamps with defaults
         const { error: insertError } = await supabase.from('resources').insert({
           name: formData.name.trim(),
           labels: formData.labels?.trim() || null,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
         });
 
         if (insertError) throw insertError;
