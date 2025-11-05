@@ -4,16 +4,16 @@ import { supabase } from '../services/supabase';
 import { getExpiryPresets, formatDateTime } from '../utils/dateUtils';
 import { addHours } from 'date-fns';
 
-interface BookingModalProps {
+interface BookingFormProps {
   resource: Resource;
   onClose: () => void;
   onSuccess: () => void;
 }
 
-type ModalMode = 'view' | 'book' | 'extend' | 'edit';
+type FormMode = 'view' | 'book' | 'extend' | 'edit';
 
-export const BookingModal = ({ resource, onClose, onSuccess }: BookingModalProps) => {
-  const [mode, setMode] = useState<ModalMode>(resource.status === 'FREE' ? 'book' : 'view');
+export const BookingForm = ({ resource, onClose, onSuccess }: BookingFormProps) => {
+  const [mode, setMode] = useState<FormMode>(resource.status === 'FREE' ? 'book' : 'view');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -45,7 +45,7 @@ export const BookingModal = ({ resource, onClose, onSuccess }: BookingModalProps
       setLoading(true);
       setError(null);
 
-      // Create booking
+      // Create booking - let database handle created_at with default
       const { data: booking, error: bookingError } = await supabase
         .from('bookings')
         .insert({
@@ -55,7 +55,6 @@ export const BookingModal = ({ resource, onClose, onSuccess }: BookingModalProps
           notes: notes.trim() || null,
           build_link: buildLink.trim() || null,
           expires_at: expiresAt.toISOString(),
-          created_at: new Date().toISOString(),
         })
         .select()
         .single();
@@ -160,6 +159,11 @@ export const BookingModal = ({ resource, onClose, onSuccess }: BookingModalProps
   const handleEdit = async () => {
     if (!resource.current_booking) return;
 
+    if (!branch.trim()) {
+      setError('Branch name is required');
+      return;
+    }
+
     try {
       setLoading(true);
       setError(null);
@@ -168,6 +172,7 @@ export const BookingModal = ({ resource, onClose, onSuccess }: BookingModalProps
       await supabase
         .from('bookings')
         .update({
+          branch: branch.trim(),
           notes: notes.trim() || null,
           build_link: buildLink.trim() || null,
         })
@@ -179,7 +184,7 @@ export const BookingModal = ({ resource, onClose, onSuccess }: BookingModalProps
         action: 'EDIT',
         resource_id: resource.id,
         booked_by: resource.current_booking.booked_by,
-        branch: resource.current_booking.branch,
+        branch: branch.trim(),
         notes: notes.trim() || null,
         build_link: buildLink.trim() || null,
         expires_at: resource.current_booking.expires_at,
@@ -196,32 +201,48 @@ export const BookingModal = ({ resource, onClose, onSuccess }: BookingModalProps
   };
 
   return (
-    <div className="fixed inset-0 z-10 overflow-y-auto">
-      <div className="flex min-h-screen items-center justify-center px-4 pt-4 pb-20 text-center sm:block sm:p-0">
-        {/* Background overlay */}
-        <div
-          className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"
-          onClick={onClose}
-        ></div>
-
-        {/* Modal panel */}
-        <div className="inline-block align-bottom bg-white rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full sm:p-6">
-          <div className="mb-4">
-            <h3 className="text-lg leading-6 font-medium text-gray-900">
-              {resource.name}
-            </h3>
-            {resource.labels && (
-              <div className="mt-2 flex flex-wrap gap-1">
-                {resource.labels.split(',').map((label, idx) => (
-                  <span
-                    key={idx}
-                    className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800"
-                  >
-                    {label.trim()}
-                  </span>
-                ))}
-              </div>
-            )}
+    <div className="bg-white shadow rounded-lg p-6 mb-6">
+      <div>
+          <div className="mb-4 flex items-start justify-between">
+            <div className="flex-1">
+              <h3 className="text-lg leading-6 font-medium text-gray-900">
+                {resource.name}
+              </h3>
+              {resource.labels && (
+                <div className="mt-2 flex flex-wrap gap-1">
+                  {resource.labels.split(',').map((label, idx) => (
+                    <span
+                      key={idx}
+                      className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800"
+                    >
+                      {label.trim()}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="flex items-center gap-2 ml-4">
+              {mode === 'view' && (
+                <button
+                  onClick={() => setMode('edit')}
+                  className="p-2 text-gray-400 hover:text-gray-600 rounded-md hover:bg-gray-100"
+                  title="Edit Details"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                  </svg>
+                </button>
+              )}
+              <button
+                onClick={mode === 'view' ? onClose : mode === 'book' ? onClose : () => setMode('view')}
+                className="p-2 text-gray-400 hover:text-gray-600 rounded-md hover:bg-gray-100"
+                title="Close"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
           </div>
 
           {error && (
@@ -233,47 +254,55 @@ export const BookingModal = ({ resource, onClose, onSuccess }: BookingModalProps
           {/* View Mode */}
           {mode === 'view' && resource.current_booking && (
             <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Status</label>
+              <div className="mb-4">
                 <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
                   🔴 Locked
                 </span>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Booked By</label>
-                <p className="mt-1 text-sm text-gray-900">{resource.current_booking.booked_by}</p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Branch</label>
-                <p className="mt-1 text-sm text-gray-900">{resource.current_booking.branch}</p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Expires At</label>
-                <p className="mt-1 text-sm text-gray-900">
-                  {formatDateTime(resource.current_booking.expires_at)}
-                </p>
-              </div>
-              {resource.current_booking.notes && (
+
+              {/* Details Grid */}
+              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Notes</label>
-                  <p className="mt-1 text-sm text-gray-900">{resource.current_booking.notes}</p>
+                  <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Booked By</label>
+                  <p className="text-sm text-gray-900 font-medium">{resource.current_booking.booked_by}</p>
                 </div>
-              )}
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Branch</label>
+                  <p className="text-sm text-gray-900 font-medium">{resource.current_booking.branch}</p>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Expires At</label>
+                  <p className="text-sm text-gray-900 font-medium">{formatDateTime(resource.current_booking.expires_at)}</p>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Notes</label>
+                  <p className="text-sm text-gray-900">{resource.current_booking.notes || '-'}</p>
+                </div>
+              </div>
+
               {resource.current_booking.build_link && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Build Link</label>
+                  <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Build Link</label>
                   <a
                     href={resource.current_booking.build_link}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="mt-1 text-sm text-blue-600 hover:text-blue-800 break-all"
+                    className="text-sm text-blue-600 hover:text-blue-800 break-all"
                   >
                     {resource.current_booking.build_link}
                   </a>
                 </div>
               )}
 
-              <div className="mt-5 sm:mt-6 flex flex-col gap-2">
+              {resource.current_booking.created_at && (
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Created At</label>
+                  <p className="text-sm text-gray-900">{formatDateTime(resource.current_booking.created_at)}</p>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="mt-5 pt-4 border-t border-gray-200 grid grid-cols-2 gap-3">
                 <button
                   onClick={handleRelease}
                   disabled={loading}
@@ -283,21 +312,9 @@ export const BookingModal = ({ resource, onClose, onSuccess }: BookingModalProps
                 </button>
                 <button
                   onClick={() => setMode('extend')}
-                  className="inline-flex justify-center w-full rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:text-sm"
+                  className="inline-flex justify-center w-full rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:text-sm"
                 >
                   Extend
-                </button>
-                <button
-                  onClick={() => setMode('edit')}
-                  className="inline-flex justify-center w-full rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:text-sm"
-                >
-                  Edit Details
-                </button>
-                <button
-                  onClick={onClose}
-                  className="inline-flex justify-center w-full rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:text-sm"
-                >
-                  Close
                 </button>
               </div>
             </div>
@@ -385,19 +402,13 @@ export const BookingModal = ({ resource, onClose, onSuccess }: BookingModalProps
                 />
               </div>
 
-              <div className="mt-5 sm:mt-6 sm:grid sm:grid-cols-2 sm:gap-3">
+              <div className="mt-5 pt-4 border-t border-gray-200">
                 <button
                   onClick={handleBook}
                   disabled={loading || !branch.trim() || !bookedBy.trim()}
                   className="inline-flex justify-center w-full rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:text-sm disabled:opacity-50"
                 >
                   {loading ? 'Booking...' : 'Book'}
-                </button>
-                <button
-                  onClick={onClose}
-                  className="mt-3 inline-flex justify-center w-full rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:text-sm sm:mt-0"
-                >
-                  Cancel
                 </button>
               </div>
             </div>
@@ -450,19 +461,13 @@ export const BookingModal = ({ resource, onClose, onSuccess }: BookingModalProps
                 />
               </div>
 
-              <div className="mt-5 sm:mt-6 sm:grid sm:grid-cols-2 sm:gap-3">
+              <div className="mt-5 pt-4 border-t border-gray-200">
                 <button
                   onClick={handleExtend}
                   disabled={loading}
                   className="inline-flex justify-center w-full rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:text-sm disabled:opacity-50"
                 >
                   {loading ? 'Extending...' : 'Extend'}
-                </button>
-                <button
-                  onClick={() => setMode('view')}
-                  className="mt-3 inline-flex justify-center w-full rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:text-sm sm:mt-0"
-                >
-                  Cancel
                 </button>
               </div>
             </div>
@@ -472,8 +477,16 @@ export const BookingModal = ({ resource, onClose, onSuccess }: BookingModalProps
           {mode === 'edit' && resource.current_booking && (
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700">Branch</label>
-                <p className="mt-1 text-sm text-gray-500">{resource.current_booking.branch} (cannot be changed)</p>
+                <label className="block text-sm font-medium text-gray-700">
+                  Branch Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={branch}
+                  onChange={(e) => setBranch(e.target.value)}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                  placeholder="feature/new-feature"
+                />
               </div>
 
               <div>
@@ -498,24 +511,17 @@ export const BookingModal = ({ resource, onClose, onSuccess }: BookingModalProps
                 />
               </div>
 
-              <div className="mt-5 sm:mt-6 sm:grid sm:grid-cols-2 sm:gap-3">
+              <div className="mt-5 pt-4 border-t border-gray-200">
                 <button
                   onClick={handleEdit}
-                  disabled={loading}
+                  disabled={loading || !branch.trim()}
                   className="inline-flex justify-center w-full rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:text-sm disabled:opacity-50"
                 >
                   {loading ? 'Saving...' : 'Save'}
                 </button>
-                <button
-                  onClick={() => setMode('view')}
-                  className="mt-3 inline-flex justify-center w-full rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:text-sm sm:mt-0"
-                >
-                  Cancel
-                </button>
               </div>
             </div>
           )}
-        </div>
       </div>
     </div>
   );
