@@ -203,22 +203,46 @@ export const BookingForm = ({ resource, onClose, onSuccess }: BookingFormProps) 
   return (
     <div className="bg-white shadow rounded-lg p-6 mb-6">
       <div>
-          <div className="mb-4">
-            <h3 className="text-lg leading-6 font-medium text-gray-900">
-              {resource.name}
-            </h3>
-            {resource.labels && (
-              <div className="mt-2 flex flex-wrap gap-1">
-                {resource.labels.split(',').map((label, idx) => (
-                  <span
-                    key={idx}
-                    className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800"
-                  >
-                    {label.trim()}
-                  </span>
-                ))}
-              </div>
-            )}
+          <div className="mb-4 flex items-start justify-between">
+            <div className="flex-1">
+              <h3 className="text-lg leading-6 font-medium text-gray-900">
+                {resource.name}
+              </h3>
+              {resource.labels && (
+                <div className="mt-2 flex flex-wrap gap-1">
+                  {resource.labels.split(',').map((label, idx) => (
+                    <span
+                      key={idx}
+                      className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800"
+                    >
+                      {label.trim()}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="flex items-center gap-2 ml-4">
+              {mode === 'view' && (
+                <button
+                  onClick={() => setMode('edit')}
+                  className="p-2 text-gray-400 hover:text-gray-600 rounded-md hover:bg-gray-100"
+                  title="Edit Details"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                  </svg>
+                </button>
+              )}
+              <button
+                onClick={mode === 'view' ? onClose : mode === 'book' ? onClose : () => setMode('view')}
+                className="p-2 text-gray-400 hover:text-gray-600 rounded-md hover:bg-gray-100"
+                title="Close"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
           </div>
 
           {error && (
@@ -236,83 +260,49 @@ export const BookingForm = ({ resource, onClose, onSuccess }: BookingFormProps) 
                 </span>
               </div>
 
-              {/* Details Table */}
-              <div className="border border-gray-200 rounded-md overflow-hidden">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    <tr>
-                      <td className="px-4 py-3 text-sm font-medium text-gray-700 bg-gray-50 w-1/2">
-                        Booked By
-                      </td>
-                      <td className="px-4 py-3 text-sm font-medium text-gray-700 bg-gray-50 w-1/2">
-                        Branch
-                      </td>
-                    </tr>
-                    <tr>
-                      <td className="px-4 py-3 text-sm text-gray-900">
-                        {resource.current_booking.booked_by}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-900">
-                        {resource.current_booking.branch}
-                      </td>
-                    </tr>
-                    <tr>
-                      <td className="px-4 py-3 text-sm font-medium text-gray-700 bg-gray-50">
-                        Expires At
-                      </td>
-                      <td className="px-4 py-3 text-sm font-medium text-gray-700 bg-gray-50">
-                        Notes
-                      </td>
-                    </tr>
-                    <tr>
-                      <td className="px-4 py-3 text-sm text-gray-900">
-                        {formatDateTime(resource.current_booking.expires_at)}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-900">
-                        {resource.current_booking.notes || '-'}
-                      </td>
-                    </tr>
-                    {resource.current_booking.build_link && (
-                      <>
-                        <tr>
-                          <td className="px-4 py-3 text-sm font-medium text-gray-700 bg-gray-50" colSpan={2}>
-                            Build Link
-                          </td>
-                        </tr>
-                        <tr>
-                          <td className="px-4 py-3 text-sm text-gray-900" colSpan={2}>
-                            <a
-                              href={resource.current_booking.build_link}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-blue-600 hover:text-blue-800 break-all"
-                            >
-                              {resource.current_booking.build_link}
-                            </a>
-                          </td>
-                        </tr>
-                      </>
-                    )}
-                    {resource.current_booking.created_at && (
-                      <>
-                        <tr>
-                          <td className="px-4 py-3 text-sm font-medium text-gray-700 bg-gray-50" colSpan={2}>
-                            Created At
-                          </td>
-                        </tr>
-                        <tr>
-                          <td className="px-4 py-3 text-sm text-gray-900" colSpan={2}>
-                            {formatDateTime(resource.current_booking.created_at)}
-                          </td>
-                        </tr>
-                      </>
-                    )}
-                  </tbody>
-                </table>
+              {/* Details Grid */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Booked By</label>
+                  <p className="text-sm text-gray-900 font-medium">{resource.current_booking.booked_by}</p>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Branch</label>
+                  <p className="text-sm text-gray-900 font-medium">{resource.current_booking.branch}</p>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Expires At</label>
+                  <p className="text-sm text-gray-900 font-medium">{formatDateTime(resource.current_booking.expires_at)}</p>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Notes</label>
+                  <p className="text-sm text-gray-900">{resource.current_booking.notes || '-'}</p>
+                </div>
               </div>
 
+              {resource.current_booking.build_link && (
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Build Link</label>
+                  <a
+                    href={resource.current_booking.build_link}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm text-blue-600 hover:text-blue-800 break-all"
+                  >
+                    {resource.current_booking.build_link}
+                  </a>
+                </div>
+              )}
+
+              {resource.current_booking.created_at && (
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Created At</label>
+                  <p className="text-sm text-gray-900">{formatDateTime(resource.current_booking.created_at)}</p>
+                </div>
+              )}
+
               {/* Action Buttons */}
-              <div className="mt-5 sm:mt-6 grid grid-cols-2 gap-3">
+              <div className="mt-5 pt-4 border-t border-gray-200 grid grid-cols-2 gap-3">
                 <button
                   onClick={handleRelease}
                   disabled={loading}
@@ -322,21 +312,9 @@ export const BookingForm = ({ resource, onClose, onSuccess }: BookingFormProps) 
                 </button>
                 <button
                   onClick={() => setMode('extend')}
-                  className="inline-flex justify-center w-full rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:text-sm"
+                  className="inline-flex justify-center w-full rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:text-sm"
                 >
                   Extend
-                </button>
-                <button
-                  onClick={() => setMode('edit')}
-                  className="inline-flex justify-center w-full rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:text-sm"
-                >
-                  Edit Details
-                </button>
-                <button
-                  onClick={onClose}
-                  className="inline-flex justify-center w-full rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:text-sm"
-                >
-                  Close
                 </button>
               </div>
             </div>
@@ -424,19 +402,13 @@ export const BookingForm = ({ resource, onClose, onSuccess }: BookingFormProps) 
                 />
               </div>
 
-              <div className="mt-5 sm:mt-6 sm:grid sm:grid-cols-2 sm:gap-3">
+              <div className="mt-5 pt-4 border-t border-gray-200">
                 <button
                   onClick={handleBook}
                   disabled={loading || !branch.trim() || !bookedBy.trim()}
                   className="inline-flex justify-center w-full rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:text-sm disabled:opacity-50"
                 >
                   {loading ? 'Booking...' : 'Book'}
-                </button>
-                <button
-                  onClick={onClose}
-                  className="mt-3 inline-flex justify-center w-full rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:text-sm sm:mt-0"
-                >
-                  Cancel
                 </button>
               </div>
             </div>
@@ -489,19 +461,13 @@ export const BookingForm = ({ resource, onClose, onSuccess }: BookingFormProps) 
                 />
               </div>
 
-              <div className="mt-5 sm:mt-6 sm:grid sm:grid-cols-2 sm:gap-3">
+              <div className="mt-5 pt-4 border-t border-gray-200">
                 <button
                   onClick={handleExtend}
                   disabled={loading}
                   className="inline-flex justify-center w-full rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:text-sm disabled:opacity-50"
                 >
                   {loading ? 'Extending...' : 'Extend'}
-                </button>
-                <button
-                  onClick={() => setMode('view')}
-                  className="mt-3 inline-flex justify-center w-full rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:text-sm sm:mt-0"
-                >
-                  Cancel
                 </button>
               </div>
             </div>
@@ -545,19 +511,13 @@ export const BookingForm = ({ resource, onClose, onSuccess }: BookingFormProps) 
                 />
               </div>
 
-              <div className="mt-5 sm:mt-6 sm:grid sm:grid-cols-2 sm:gap-3">
+              <div className="mt-5 pt-4 border-t border-gray-200">
                 <button
                   onClick={handleEdit}
                   disabled={loading || !branch.trim()}
                   className="inline-flex justify-center w-full rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:text-sm disabled:opacity-50"
                 >
                   {loading ? 'Saving...' : 'Save'}
-                </button>
-                <button
-                  onClick={() => setMode('view')}
-                  className="mt-3 inline-flex justify-center w-full rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:text-sm sm:mt-0"
-                >
-                  Cancel
                 </button>
               </div>
             </div>
