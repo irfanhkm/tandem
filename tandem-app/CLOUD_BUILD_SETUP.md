@@ -57,14 +57,33 @@ For triggering builds (optional):
 5. Click **Create** - the key will download automatically
 6. **Keep this file secure!** It contains credentials to access your GCP project
 
-### Step 5: Start the Application
+### Step 5: Deploy the Application
 
+The application includes API routes that need to be deployed alongside the frontend.
+
+**For Production (Vercel - Recommended):**
+```bash
+# Install Vercel CLI
+npm install -g vercel
+
+# Deploy (from tandem-app directory)
+vercel
+```
+
+Vercel automatically detects and deploys both the frontend and `/api` routes as serverless functions.
+
+**For Development:**
 ```bash
 cd tandem-app
+
+# Option 1: Use Vercel Dev (handles both frontend and API)
+npx vercel dev
+
+# Option 2: Just frontend (you'll need to deploy API separately)
 npm run dev
 ```
 
-The application will be available at `http://localhost:5173`
+See `api/README.md` for other deployment options (Netlify, self-hosted, etc.)
 
 ### Step 6: Configure the Integration in the UI
 

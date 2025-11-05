@@ -1,24 +1,18 @@
 // Google Cloud Build Integration Service
 // This service implements the IntegrationProvider interface for GCP Cloud Build
 
-// IMPORTANT: This is a REFERENCE IMPLEMENTATION showing the integration architecture.
-// The Google Cloud Build API cannot run in browsers - it requires a backend service.
-//
-// To make this work, you need to:
-// 1. Create a backend API (Node.js, Supabase Edge Function, etc.)
-// 2. Install @google-cloud/cloudbuild in your backend
-// 3. Move the Cloud Build API calls to the backend
-// 4. Update these functions to call your backend instead
-//
-// See CLOUD_BUILD_SETUP.md for detailed implementation guide.
+// The Cloud Build API runs in serverless API routes (/api/gcp/*)
+// These API routes use @google-cloud/cloudbuild package server-side
+// Frontend calls these API routes, which are deployed alongside the app
 
 import { supabase } from './supabase';
 import type { IntegrationProvider, ConfigField, SyncResult } from '../types/integrations';
 import { getIntegrationConfig } from '../types/integrations';
 
-// Backend API endpoint - configure this in your .env file
-// Example: VITE_BACKEND_API_URL=https://your-backend.com/api
-const BACKEND_API_URL = import.meta.env.VITE_BACKEND_API_URL || null;
+// API base URL - defaults to same origin (relative path)
+// In development: http://localhost:5173/api
+// In production: /api (same domain)
+const API_BASE_URL = '/api';
 
 // Get configuration from localStorage
 function getGCPConfig() {
@@ -31,11 +25,6 @@ function getGCPConfig() {
     projectId: config.settings.projectId || null,
     serviceAccountKey: config.settings.serviceAccountKey || null,
   };
-}
-
-// Check if backend is configured
-function isBackendConfigured(): boolean {
-  return !!BACKEND_API_URL;
 }
 
 export interface BuildTrigger {
@@ -76,97 +65,71 @@ export interface Build {
   };
 }
 
-// Fetch all build triggers from GCP
-// NOTE: This currently returns empty array. Implement backend API to make it work.
+// Fetch all build triggers from GCP via API route
 export async function fetchBuildTriggers(): Promise<BuildTrigger[]> {
-  if (!isBackendConfigured()) {
-    console.warn(
-      'Backend API not configured. Set VITE_BACKEND_API_URL to enable Cloud Build integration.'
-    );
-    return [];
-  }
+  const { projectId, serviceAccountKey } = getGCPConfig();
 
-  const { projectId } = getGCPConfig();
   if (!projectId) {
     console.warn('GCP Project ID not configured');
     return [];
   }
 
-  try {
-    // TODO: Replace with actual backend API call
-    // const response = await fetch(`${BACKEND_API_URL}/gcp/triggers?projectId=${projectId}`);
-    // return await response.json();
-
-    console.warn('fetchBuildTriggers: Backend implementation required');
+  if (!serviceAccountKey) {
+    console.warn('Service Account Key not configured');
     return [];
+  }
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/gcp/triggers`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        projectId,
+        serviceAccountKey,
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to fetch triggers');
+    }
+
+    const data = await response.json();
+    return data.triggers || [];
   } catch (error) {
     console.error('Error fetching build triggers:', error);
-    return [];
+    throw error;
   }
 }
 
 // Fetch latest builds for a specific trigger
+// TODO: Implement API route if needed
 export async function fetchBuildsForTrigger(_triggerId: string, _limit: number = 10): Promise<Build[]> {
-  if (!isBackendConfigured()) {
-    return [];
-  }
-
-  try {
-    // TODO: Replace with actual backend API call
-    console.warn('fetchBuildsForTrigger: Backend implementation required');
-    return [];
-  } catch (error) {
-    console.error('Error fetching builds for trigger:', error);
-    return [];
-  }
+  console.warn('fetchBuildsForTrigger: Not implemented yet');
+  return [];
 }
 
 // Fetch a specific build by ID
+// TODO: Implement API route if needed
 export async function fetchBuildById(_buildId: string): Promise<Build | null> {
-  if (!isBackendConfigured()) {
-    return null;
-  }
-
-  try {
-    // TODO: Replace with actual backend API call
-    console.warn('fetchBuildById: Backend implementation required');
-    return null;
-  } catch (error) {
-    console.error('Error fetching build by ID:', error);
-    return null;
-  }
+  console.warn('fetchBuildById: Not implemented yet');
+  return null;
 }
 
 // Fetch all recent builds (not filtered by trigger)
+// TODO: Implement API route if needed
 export async function fetchAllBuilds(_limit: number = 20): Promise<Build[]> {
-  if (!isBackendConfigured()) {
-    return [];
-  }
-
-  try {
-    // TODO: Replace with actual backend API call
-    console.warn('fetchAllBuilds: Backend implementation required');
-    return [];
-  } catch (error) {
-    console.error('Error fetching all builds:', error);
-    return [];
-  }
+  console.warn('fetchAllBuilds: Not implemented yet');
+  return [];
 }
 
 // Trigger a build (requires Cloud Build Editor role)
+// TODO: Implement API route if needed
 export async function triggerBuild(_triggerId: string, _branchName: string): Promise<Build | null> {
-  if (!isBackendConfigured()) {
-    return null;
-  }
-
-  try {
-    // TODO: Replace with actual backend API call
-    console.warn('triggerBuild: Backend implementation required');
-    return null;
-  } catch (error) {
-    console.error('Error triggering build:', error);
-    return null;
-  }
+  console.warn('triggerBuild: Not implemented yet');
+  return null;
 }
 
 // Helper: Format build status for display
@@ -212,20 +175,13 @@ export async function syncTriggersToResources(): Promise<SyncResult> {
     errors: [],
   };
 
-  if (!isBackendConfigured()) {
-    result.errors.push(
-      'Backend API not configured. Cloud Build integration requires a backend service. See CLOUD_BUILD_SETUP.md for implementation guide.'
-    );
-    return result;
-  }
-
   try {
-    // 1. Fetch all triggers from GCP (via backend)
+    // 1. Fetch all triggers from GCP (via API route)
     const triggers = await fetchBuildTriggers();
 
     if (triggers.length === 0) {
       result.errors.push(
-        'No build triggers found. This could mean: (1) Backend not implemented, (2) No triggers in GCP, or (3) Configuration error.'
+        'No build triggers found in your GCP project. Make sure you have Cloud Build triggers configured.'
       );
       return result;
     }
@@ -293,8 +249,7 @@ export async function syncTriggersToResources(): Promise<SyncResult> {
 export const GCPCloudBuildIntegration: IntegrationProvider = {
   type: 'gcp-cloud-build',
   name: 'Google Cloud Build',
-  description:
-    'Sync build triggers from Google Cloud Build as bookable resources (requires backend implementation)',
+  description: 'Sync build triggers from Google Cloud Build as bookable resources',
 
   isConfigured(): boolean {
     const config = getIntegrationConfig('gcp-cloud-build');
@@ -330,15 +285,8 @@ export const GCPCloudBuildIntegration: IntegrationProvider = {
       }
     }
 
-    // Warn about backend requirement
-    if (!isBackendConfigured()) {
-      errors.push(
-        'Warning: Backend API not configured (VITE_BACKEND_API_URL). This integration will not sync until you implement a backend service. See CLOUD_BUILD_SETUP.md'
-      );
-    }
-
     return {
-      valid: errors.filter((e) => !e.startsWith('Warning:')).length === 0,
+      valid: errors.length === 0,
       errors,
     };
   },
@@ -364,7 +312,7 @@ export const GCPCloudBuildIntegration: IntegrationProvider = {
         placeholder: '{"type":"service_account","project_id":"...","private_key":"..."}',
         required: true,
         description:
-          'Service account JSON key with Cloud Build Viewer role. Stored in browser localStorage. Note: Cloud Build API requires a backend - this is for configuration only.',
+          'Service account JSON key with Cloud Build Viewer role. Stored in browser localStorage and sent to API route for server-side Cloud Build API calls.',
       },
     ];
   },
