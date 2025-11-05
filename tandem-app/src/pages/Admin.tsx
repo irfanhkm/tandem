@@ -29,6 +29,7 @@ export const Admin = () => {
       const { data, error } = await supabase
         .from('resources')
         .select('*')
+        .is('deleted_at', null)
         .order('name');
 
       if (error) throw error;
@@ -105,26 +106,60 @@ export const Admin = () => {
       setError(null);
 
       // Check if resource has active bookings
-      const { data: bookings, error: bookingsError } = await supabase
+      const { data: activeBookings, error: bookingsError } = await supabase
         .from('bookings')
-        .select('id')
+        .select('*')
         .eq('resource_id', resource.id)
-        .is('released_at', null);
+        .is('released_at', null)
+        .is('deleted_at', null);
 
       if (bookingsError) throw bookingsError;
 
-      if (bookings && bookings.length > 0) {
+      if (activeBookings && activeBookings.length > 0) {
         setError('Cannot delete resource with active bookings. Release the booking first.');
         return;
       }
 
-      // Delete resource
+      // Soft delete resource (set deleted_at timestamp)
       const { error: deleteError } = await supabase
         .from('resources')
-        .delete()
+        .update({ deleted_at: new Date().toISOString() })
         .eq('id', resource.id);
 
       if (deleteError) throw deleteError;
+
+      // Soft delete all associated bookings
+      const { error: bookingDeleteError } = await supabase
+        .from('bookings')
+        .update({ deleted_at: new Date().toISOString() })
+        .eq('resource_id', resource.id)
+        .is('deleted_at', null);
+
+      if (bookingDeleteError) throw bookingDeleteError;
+
+      // Log deletion to booking history for all deleted bookings
+      const { data: deletedBookings } = await supabase
+        .from('bookings')
+        .select('*')
+        .eq('resource_id', resource.id)
+        .not('deleted_at', 'is', null);
+
+      if (deletedBookings && deletedBookings.length > 0) {
+        const historyEntries = deletedBookings.map(booking => ({
+          booking_id: booking.id,
+          action: 'DELETE',
+          resource_id: booking.resource_id,
+          booked_by: booking.booked_by,
+          branch: booking.branch,
+          notes: booking.notes,
+          build_link: booking.build_link,
+          expires_at: booking.expires_at,
+          released_at: booking.released_at,
+          timestamp: new Date().toISOString()
+        }));
+
+        await supabase.from('booking_history').insert(historyEntries);
+      }
 
       fetchResources();
     } catch (err: any) {

@@ -10,8 +10,12 @@ CREATE TABLE IF NOT EXISTS public.resources (
   name TEXT NOT NULL UNIQUE,
   labels TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  deleted_at TIMESTAMP WITH TIME ZONE
 );
+
+-- Index for soft delete queries
+CREATE INDEX idx_resources_deleted_at ON public.resources(deleted_at);
 
 -- Enable Row Level Security (but allow all operations)
 ALTER TABLE public.resources ENABLE ROW LEVEL SECURITY;
@@ -40,6 +44,7 @@ CREATE TABLE IF NOT EXISTS public.bookings (
   expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   released_at TIMESTAMP WITH TIME ZONE,
+  deleted_at TIMESTAMP WITH TIME ZONE,
   CONSTRAINT one_active_booking_per_resource CHECK (released_at IS NULL OR released_at IS NOT NULL)
 );
 
@@ -48,6 +53,7 @@ CREATE INDEX idx_bookings_resource_id ON public.bookings(resource_id);
 CREATE INDEX idx_bookings_booked_by ON public.bookings(booked_by);
 CREATE INDEX idx_bookings_expires_at ON public.bookings(expires_at);
 CREATE INDEX idx_bookings_released_at ON public.bookings(released_at);
+CREATE INDEX idx_bookings_deleted_at ON public.bookings(deleted_at);
 
 -- Unique constraint: one active booking per resource
 CREATE UNIQUE INDEX unique_active_booking_per_resource
@@ -74,7 +80,7 @@ CREATE POLICY "Anyone can delete bookings" ON public.bookings
 CREATE TABLE IF NOT EXISTS public.booking_history (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   booking_id UUID,
-  action TEXT NOT NULL CHECK (action IN ('BOOK', 'EXTEND', 'RELEASE', 'EXPIRED', 'EDIT')),
+  action TEXT NOT NULL CHECK (action IN ('BOOK', 'EXTEND', 'RELEASE', 'EXPIRED', 'EDIT', 'DELETE')),
   resource_id UUID NOT NULL REFERENCES public.resources(id) ON DELETE CASCADE,
   booked_by TEXT NOT NULL,
   branch TEXT NOT NULL,
