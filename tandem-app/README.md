@@ -1,269 +1,365 @@
 # Tandem - Environment Coordination Platform
 
-Tandem is a simple web application that helps engineering teams coordinate shared test environments (QA, Staging, UAT) by providing visibility, booking, and management capabilities.
+A Next.js-based resource booking and environment coordination platform with Google Cloud Build integration.
 
 ## Features
 
-- 🔒 **Resource Booking** - Book environments with your name, branch, notes, and expiry time
-- 📊 **Real-time Dashboard** - See who's using what, with live updates
-- ⏰ **Auto-release** - Bookings automatically release when expired
-- 🏷️ **Label Filtering** - Filter resources by tags (qa, uat, service names)
-- 🚫 **No Authentication** - Simple trust-based system for small teams
-- 📝 **Audit Trail** - Complete history of all booking actions
+- **Resource Management**: Create and manage bookable resources (environments, services, etc.)
+- **Booking System**: Lock/unlock resources with expiry times, branch info, and build links
+- **Realtime Updates**: Live synchronization using Supabase realtime subscriptions
+- **Cloud Build Integration**: Sync Google Cloud Build triggers as bookable resources
+- **Soft Deletes**: Safe deletion with full audit trail
+- **Labels & Filtering**: Organize resources with tags
 
 ## Tech Stack
 
-- **Frontend**: React 18 + TypeScript + Vite + Tailwind CSS v4
-- **Backend**: Supabase (PostgreSQL + Realtime)
-- **Routing**: React Router v6
-- **Date Utilities**: date-fns
-- **Deployment**: Vercel (or any static hosting)
+- **Frontend**: Next.js 16 (React 19), TypeScript, Tailwind CSS
+- **Backend**: Next.js API Routes (serverless functions)
+- **Database**: Supabase (PostgreSQL with realtime subscriptions)
+- **Cloud Integration**: Google Cloud Build API
+- **Deployment**: Vercel, Netlify, or self-hosted
 
-## Prerequisites
+## Getting Started
+
+### Prerequisites
 
 - Node.js 18+ and npm
-- Supabase account (free tier works)
+- Supabase account and project
+- (Optional) Google Cloud Platform project with Cloud Build enabled
 
-## Quick Start
+### Installation
 
-### 1. Install Dependencies
+1. Clone the repository:
+```bash
+git clone <repository-url>
+cd tandem-nextjs
+```
 
+2. Install dependencies:
 ```bash
 npm install
 ```
 
-### 2. Set Up Supabase
-
-1. Create a new project at [supabase.com](https://supabase.com)
-2. Go to **SQL Editor** → New Query
-3. Copy and paste the entire contents of `supabase-schema.sql`
-4. Click **Run** to create all tables and functions
-
-### 3. Configure Environment
-
+3. Configure environment variables:
 ```bash
-# Copy the example env file
-cp .env.example .env
-
-# Edit .env and add your Supabase credentials:
-# (Find these in Supabase: Settings → API)
-VITE_SUPABASE_URL=https://xxxxx.supabase.co
-VITE_SUPABASE_ANON_KEY=your-anon-key-here
+cp .env.local.example .env.local
 ```
 
-### 4. Run the App
+Edit `.env.local` and add your Supabase credentials:
+```env
+NEXT_PUBLIC_SUPABASE_URL=your-supabase-project-url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
+```
 
+4. Set up Supabase database:
+   - Create tables as defined in the database schema (see Database Schema section)
+   - Enable Row Level Security (RLS) if needed
+   - Enable Realtime for `resources` and `bookings` tables
+
+5. Run the development server:
 ```bash
 npm run dev
 ```
 
-Open [http://localhost:5173](http://localhost:5173) in your browser.
-
-### 5. Add Resources
-
-1. Navigate to **Admin** (in the header)
-2. Click **Add Resource**
-3. Add your environments:
-   - Name: `qa-environment-1`
-   - Labels: `qa, testing`
-4. Click **Create**
-
-### 6. Start Booking!
-
-1. Go to **Dashboard**
-2. Click any **Free** resource
-3. Enter:
-   - **Your Name** (required)
-   - **Branch Name** (required)
-   - **Expiry Time** (use presets or custom)
-   - Notes and build link (optional)
-4. Click **Book**
-5. Resource is now locked to you!
-
-## How It Works
-
-### No Authentication
-- **No login required** - Just open the app and start using it
-- **Trust-based system** - Users enter their own name when booking
-- **Perfect for small teams** - Simple and fast, no OAuth setup
-
-### Booking Flow
-
-**To Book:**
-1. Click a Free resource
-2. Enter your name + branch details
-3. Select expiry time (1h, 2h, 4h, or custom)
-4. Click Book
-
-**To Release:**
-1. Click the locked resource
-2. Click Release button
-3. Resource is Free again
-
-**To Extend:**
-1. Click the locked resource
-2. Click Extend
-3. Choose +1h, +2h, +4h, or select custom time
-
-### Dashboard
-Shows all resources with:
-- Resource name and labels
-- Status (🟢 Free / 🔴 Locked)
-- Who booked it (by name)
-- Branch name
-- Expiry time
-- When it was booked
-
-### Admin Panel
-- Create/Edit/Delete resources
-- Manage resource labels
-- No restrictions - everyone can access
-
-## Auto-Release Setup
-
-Expired bookings are automatically released using a PostgreSQL function. To enable:
-
-### Option 1: Supabase Edge Function (Recommended)
-
-Create a Supabase Edge Function:
-
-```typescript
-// supabase/functions/auto-release/index.ts
-import { createClient } from '@supabase/supabase-js'
-
-Deno.serve(async () => {
-  const supabaseAdmin = createClient(
-    Deno.env.get('SUPABASE_URL')!,
-    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-  )
-
-  const { error } = await supabaseAdmin.rpc('auto_release_expired_bookings')
-
-  if (error) {
-    return new Response(JSON.stringify({ error: error.message }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    })
-  }
-
-  return new Response(JSON.stringify({ success: true }), {
-    headers: { 'Content-Type': 'application/json' },
-  })
-})
-```
-
-Deploy and set up a cron trigger in Supabase dashboard.
-
-### Option 2: External Cron Service
-
-Use [cron-job.org](https://cron-job.org) (free):
-
-1. Create account
-2. Create new cron job:
-   - URL: `https://YOUR-PROJECT.supabase.co/rest/v1/rpc/auto_release_expired_bookings`
-   - Method: POST
-   - Headers:
-     - `apikey: YOUR_SUPABASE_ANON_KEY`
-     - `Content-Type: application/json`
-   - Schedule: Every minute
-
-### Option 3: pg_cron Extension
-
-If available in your Supabase plan:
-
-```sql
-SELECT cron.schedule(
-  'auto-release',
-  '* * * * *',
-  'SELECT auto_release_expired_bookings()'
-);
-```
+Open [http://localhost:3000](http://localhost:3000) to see the application.
 
 ## Database Schema
 
-- **resources**: Environments/triggers available for booking
-- **bookings**: Active bookings (one per resource)
-- **booking_history**: Audit trail of all actions
+### Resources Table
+```sql
+CREATE TABLE resources (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  labels TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  deleted_at TIMESTAMPTZ
+);
+```
 
-See `supabase-schema.sql` for complete schema.
+### Bookings Table
+```sql
+CREATE TABLE bookings (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  resource_id UUID REFERENCES resources(id),
+  booked_by TEXT NOT NULL,
+  branch TEXT NOT NULL,
+  notes TEXT,
+  build_link TEXT,
+  expires_at TIMESTAMPTZ NOT NULL,
+  released_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  deleted_at TIMESTAMPTZ
+);
+```
+
+### Booking History Table
+```sql
+CREATE TABLE booking_history (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  booking_id UUID,
+  action TEXT NOT NULL,
+  resource_id UUID,
+  booked_by TEXT,
+  branch TEXT,
+  notes TEXT,
+  build_link TEXT,
+  expires_at TIMESTAMPTZ,
+  released_at TIMESTAMPTZ,
+  timestamp TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+## Google Cloud Build Integration
+
+### Setup
+
+1. Navigate to Admin Panel → ⚙️ Integrations
+2. Click "Configure" on Google Cloud Build integration
+3. Enter your GCP Project ID
+4. Paste your Service Account Key JSON (requires Cloud Build Viewer role)
+5. Click "Save Configuration"
+6. Click "Sync Now" to import build triggers as resources
+
+### Service Account Setup
+
+Create a service account with Cloud Build Viewer role:
+
+```bash
+# Create service account
+gcloud iam service-accounts create tandem-cloudbuild \
+  --display-name="Tandem Cloud Build Integration"
+
+# Grant Cloud Build Viewer role
+gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
+  --member="serviceAccount:tandem-cloudbuild@YOUR_PROJECT_ID.iam.gserviceaccount.com" \
+  --role="roles/cloudbuild.builds.viewer"
+
+# Create and download key
+gcloud iam service-accounts keys create key.json \
+  --iam-account=tandem-cloudbuild@YOUR_PROJECT_ID.iam.gserviceaccount.com
+```
+
+Copy the contents of `key.json` and paste into the integration settings.
+
+## API Routes
+
+Next.js API routes provide server-side functionality:
+
+### POST /api/gcp/triggers
+Fetches Cloud Build triggers from Google Cloud Platform.
+
+**Request Body:**
+```json
+{
+  "projectId": "my-gcp-project",
+  "serviceAccountKey": "{...service account JSON...}"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "triggers": [
+    {
+      "id": "trigger-id",
+      "name": "trigger-name",
+      "description": "...",
+      "github": {...},
+      "disabled": false
+    }
+  ],
+  "count": 5
+}
+```
+
+## Deployment
+
+### Vercel (Recommended)
+
+1. Push your code to GitHub/GitLab/Bitbucket
+
+2. Import project to Vercel:
+```bash
+vercel
+```
+
+3. Set environment variables in Vercel dashboard:
+   - `NEXT_PUBLIC_SUPABASE_URL`
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+
+4. Deploy:
+```bash
+vercel --prod
+```
+
+### Netlify
+
+1. Create `netlify.toml`:
+```toml
+[build]
+  command = "npm run build"
+  publish = ".next"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+```
+
+2. Deploy:
+```bash
+netlify deploy --prod
+```
+
+3. Set environment variables in Netlify dashboard
+
+### Self-Hosted
+
+1. Build the application:
+```bash
+npm run build
+```
+
+2. Start the production server:
+```bash
+npm start
+```
+
+3. Or use PM2 for process management:
+```bash
+pm2 start npm --name "tandem" -- start
+```
+
+## Project Structure
+
+```
+tandem-nextjs/
+├── src/
+│   ├── app/                    # Next.js App Router
+│   │   ├── api/               # API routes (server-side)
+│   │   │   └── gcp/
+│   │   │       └── triggers/
+│   │   │           └── route.ts
+│   │   ├── admin/             # Admin page
+│   │   │   └── page.tsx
+│   │   ├── layout.tsx         # Root layout
+│   │   ├── page.tsx           # Dashboard (homepage)
+│   │   └── globals.css        # Global styles
+│   ├── components/            # React components
+│   │   ├── BookingForm.tsx
+│   │   ├── Header.tsx
+│   │   ├── IntegrationSettings.tsx
+│   │   └── ResourceTable.tsx
+│   ├── lib/                   # Utilities and services
+│   │   ├── gcpService.ts
+│   │   └── supabase.ts
+│   ├── types/                 # TypeScript types
+│   │   ├── index.ts
+│   │   └── integrations.ts
+│   └── utils/                 # Helper functions
+│       └── dateUtils.ts
+├── .env.local                 # Environment variables
+├── next.config.ts             # Next.js configuration
+├── tailwind.config.ts         # Tailwind CSS config
+├── tsconfig.json              # TypeScript config
+└── package.json
+```
+
+## Key Features
+
+### Realtime Synchronization
+The application uses Supabase realtime subscriptions to provide instant updates:
+- New bookings appear immediately for all users
+- Resource status updates in real-time
+- No manual refresh needed
+
+### Soft Delete System
+All deletions are soft deletes (setting `deleted_at` timestamp):
+- Resources can be restored if needed
+- Full audit trail maintained
+- Active bookings prevented from deletion
+
+### Cloud Build Integration
+- Automatically syncs build triggers as resources
+- Stores configuration in browser localStorage
+- Server-side API calls to Google Cloud Build
+- No credentials stored on server
 
 ## Development
 
-```bash
-# Install dependencies
-npm install
+### Available Scripts
 
-# Run dev server
+```bash
+# Development server
 npm run dev
 
-# Build for production
+# Production build
 npm run build
 
-# Preview production build
-npm run preview
+# Start production server
+npm start
 
 # Lint code
 npm run lint
 ```
 
-## Deployment
+### Adding New Integrations
 
-### Deploy to Vercel
+To add support for AWS CodeBuild, Azure Pipelines, or other cloud providers:
 
-```bash
-npm install -g vercel
-vercel
+1. Create a new service in `src/lib/` (e.g., `awsService.ts`)
+2. Implement the `IntegrationProvider` interface
+3. Add API route in `src/app/api/`
+4. Add integration to Admin panel
+
+Example:
+```typescript
+export const AWSCodeBuildIntegration: IntegrationProvider = {
+  type: 'aws-codebuild',
+  name: 'AWS CodeBuild',
+  description: 'Sync AWS CodeBuild projects',
+  // ... implementation
+};
 ```
-
-Add environment variables in Vercel dashboard:
-- `VITE_SUPABASE_URL`
-- `VITE_SUPABASE_ANON_KEY`
-
-### Deploy to Netlify
-
-```bash
-npm run build
-# Upload dist/ folder to Netlify
-```
-
-Add the same environment variables in Netlify dashboard.
 
 ## Troubleshooting
 
-### Resources not showing
+### Build Errors
 
-- Check Supabase RLS policies are applied
-- Verify environment variables are set correctly
-- Check browser console for API errors
+**Error: Missing Supabase environment variables**
+- Ensure `.env.local` exists with correct values
+- Check that variables start with `NEXT_PUBLIC_`
 
-### Styles not loading
+**Error: Tailwind CSS PostCSS plugin**
+- Run: `npm install @tailwindcss/postcss`
 
-- Clear browser cache
-- Rebuild: `npm run build`
-- Check if Tailwind CSS is working: `npm list tailwindcss`
+### Runtime Errors
 
-### Auto-release not working
+**Supabase connection fails**
+- Verify Supabase URL and anon key are correct
+- Check Supabase project status
+- Ensure RLS policies allow public access
 
-- Verify PostgreSQL function is created: Run `SELECT auto_release_expired_bookings();` in Supabase SQL Editor
-- Check cron job is running (check Supabase Functions logs)
-- Test manually in SQL Editor
+**Cloud Build API errors**
+- Verify service account has correct permissions
+- Check Project ID is correct
+- Ensure Cloud Build API is enabled in GCP
 
-## Phase 2: Google Cloud Build Integration
+## Security Considerations
 
-Coming soon! We'll add:
-- Fetch build triggers from GCP
-- Display latest build info per resource
-- Trigger builds directly from Tandem
-- Auto-book on build start
+1. **Environment Variables**: Never commit `.env.local` to version control
+2. **API Keys**: Supabase anon key should have RLS policies enabled
+3. **Service Account Keys**: Stored client-side in localStorage (consider your security requirements)
+4. **Row Level Security**: Enable RLS on Supabase tables for production
 
 ## License
 
-[To be determined - likely MIT or Apache 2.0]
+MIT
 
 ## Support
 
-For issues or questions, check the documentation or contact your team admin.
-
----
-
-Built for better environment coordination 🚀
+For issues and questions:
+- Open an issue on GitHub
+- Check existing documentation
+- Review Supabase and Next.js docs

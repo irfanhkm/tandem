@@ -1,6 +1,8 @@
+'use client';
+
 import { useState } from 'react';
 import type { Resource } from '../types';
-import { supabase } from '../services/supabase';
+import { supabase } from '../lib/supabase';
 import { getExpiryPresets, formatDateTime } from '../utils/dateUtils';
 import { addHours } from 'date-fns';
 

@@ -1,3 +1,5 @@
+'use client';
+
 import { useState, useEffect } from 'react';
 import type { IntegrationProvider, IntegrationConfig, SyncResult } from '../types/integrations';
 import {
