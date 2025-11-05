@@ -1,20 +1,24 @@
 // Google Cloud Build Integration Service
 // This service implements the IntegrationProvider interface for GCP Cloud Build
 
+// IMPORTANT: This is a REFERENCE IMPLEMENTATION showing the integration architecture.
+// The Google Cloud Build API cannot run in browsers - it requires a backend service.
+//
+// To make this work, you need to:
+// 1. Create a backend API (Node.js, Supabase Edge Function, etc.)
+// 2. Install @google-cloud/cloudbuild in your backend
+// 3. Move the Cloud Build API calls to the backend
+// 4. Update these functions to call your backend instead
+//
+// See CLOUD_BUILD_SETUP.md for detailed implementation guide.
+
 import { supabase } from './supabase';
 import type { IntegrationProvider, ConfigField, SyncResult } from '../types/integrations';
 import { getIntegrationConfig } from '../types/integrations';
 
-// Default GCP Project ID - can be overridden by user
-const DEFAULT_GCP_PROJECT_ID = 'your-gcp-project-id';
-
-// Type definition for CloudBuildClient
-type CloudBuildClient = any;
-
-// Cloud Build client cache
-let cloudBuildClient: CloudBuildClient | null = null;
-let clientInitError: string | null = null;
-let lastConfigHash: string | null = null;
+// Backend API endpoint - configure this in your .env file
+// Example: VITE_BACKEND_API_URL=https://your-backend.com/api
+const BACKEND_API_URL = import.meta.env.VITE_BACKEND_API_URL || null;
 
 // Get configuration from localStorage
 function getGCPConfig() {
@@ -24,66 +28,14 @@ function getGCPConfig() {
   }
 
   return {
-    projectId: config.settings.projectId || DEFAULT_GCP_PROJECT_ID,
+    projectId: config.settings.projectId || null,
     serviceAccountKey: config.settings.serviceAccountKey || null,
   };
 }
 
-// Initialize Cloud Build client (browser-safe)
-async function getCloudBuildClient(): Promise<CloudBuildClient | null> {
-  const { projectId, serviceAccountKey } = getGCPConfig();
-
-  if (!projectId || projectId === 'your-gcp-project-id') {
-    console.warn('GCP Project ID not configured. Please configure Cloud Build integration.');
-    return null;
-  }
-
-  if (!serviceAccountKey) {
-    console.warn('Service Account Key not configured. Please configure Cloud Build integration.');
-    return null;
-  }
-
-  // Create a hash of current config to detect changes
-  const configHash = projectId + ':' + serviceAccountKey.substring(0, 50);
-
-  // Reset client if config changed
-  if (lastConfigHash && lastConfigHash !== configHash) {
-    cloudBuildClient = null;
-    clientInitError = null;
-  }
-
-  lastConfigHash = configHash;
-
-  if (clientInitError) {
-    console.warn('Cloud Build client previously failed to initialize:', clientInitError);
-    return null;
-  }
-
-  if (!cloudBuildClient) {
-    try {
-      // Dynamic import to prevent bundling issues
-      // This will fail in browser environments - that's expected
-      const { CloudBuildClient } = await import('@google-cloud/cloudbuild');
-
-      // Parse service account key
-      const credentials = JSON.parse(serviceAccountKey);
-
-      cloudBuildClient = new CloudBuildClient({
-        projectId,
-        credentials,
-      });
-
-      console.log('Cloud Build client initialized successfully for project:', projectId);
-    } catch (error) {
-      const errorMsg =
-        'Cloud Build integration requires a backend service in production. Currently running in demo mode.';
-      clientInitError = errorMsg;
-      console.warn(errorMsg, error);
-      return null;
-    }
-  }
-
-  return cloudBuildClient;
+// Check if backend is configured
+function isBackendConfigured(): boolean {
+  return !!BACKEND_API_URL;
 }
 
 export interface BuildTrigger {
@@ -103,12 +55,20 @@ export interface BuildTrigger {
 export interface Build {
   id: string;
   projectId: string;
-  status: 'STATUS_UNKNOWN' | 'QUEUED' | 'WORKING' | 'SUCCESS' | 'FAILURE' | 'INTERNAL_ERROR' | 'TIMEOUT' | 'CANCELLED';
+  status:
+    | 'STATUS_UNKNOWN'
+    | 'QUEUED'
+    | 'WORKING'
+    | 'SUCCESS'
+    | 'FAILURE'
+    | 'INTERNAL_ERROR'
+    | 'TIMEOUT'
+    | 'CANCELLED';
   createTime: string;
   startTime?: string;
   finishTime?: string;
   logUrl?: string;
-  substitutions?: Record<string, string>;
+  substitutions?: Record<string, any>;
   sourceProvenance?: {
     resolvedRepoSource?: {
       commitSha?: string;
@@ -117,36 +77,28 @@ export interface Build {
 }
 
 // Fetch all build triggers from GCP
+// NOTE: This currently returns empty array. Implement backend API to make it work.
 export async function fetchBuildTriggers(): Promise<BuildTrigger[]> {
-  const client = await getCloudBuildClient();
-  if (!client) {
-    console.warn('Cloud Build client not initialized');
+  if (!isBackendConfigured()) {
+    console.warn(
+      'Backend API not configured. Set VITE_BACKEND_API_URL to enable Cloud Build integration.'
+    );
     return [];
   }
 
   const { projectId } = getGCPConfig();
-  if (!projectId) return [];
+  if (!projectId) {
+    console.warn('GCP Project ID not configured');
+    return [];
+  }
 
   try {
-    const [triggers] = await client.listBuildTriggers({
-      projectId,
-    });
+    // TODO: Replace with actual backend API call
+    // const response = await fetch(`${BACKEND_API_URL}/gcp/triggers?projectId=${projectId}`);
+    // return await response.json();
 
-    return (triggers || []).map((trigger: any) => ({
-      id: trigger.id || '',
-      name: trigger.name || '',
-      description: trigger.description || '',
-      filename: trigger.filename || '',
-      github: trigger.github
-        ? {
-            owner: trigger.github.owner || '',
-            name: trigger.github.name || '',
-            branch: trigger.github.push?.branch || '',
-          }
-        : undefined,
-      createTime: trigger.createTime || '',
-      disabled: trigger.disabled || false,
-    }));
+    console.warn('fetchBuildTriggers: Backend implementation required');
+    return [];
   } catch (error) {
     console.error('Error fetching build triggers:', error);
     return [];
@@ -154,34 +106,15 @@ export async function fetchBuildTriggers(): Promise<BuildTrigger[]> {
 }
 
 // Fetch latest builds for a specific trigger
-export async function fetchBuildsForTrigger(triggerId: string, limit: number = 10): Promise<Build[]> {
-  const client = await getCloudBuildClient();
-  if (!client) {
-    console.warn('Cloud Build client not initialized');
+export async function fetchBuildsForTrigger(_triggerId: string, _limit: number = 10): Promise<Build[]> {
+  if (!isBackendConfigured()) {
     return [];
   }
 
-  const { projectId } = getGCPConfig();
-  if (!projectId) return [];
-
   try {
-    const [builds] = await client.listBuilds({
-      projectId,
-      filter: `build_trigger_id="${triggerId}"`,
-      pageSize: limit,
-    });
-
-    return (builds || []).map((build: any) => ({
-      id: build.id || '',
-      projectId: build.projectId || '',
-      status: build.status || 'STATUS_UNKNOWN',
-      createTime: build.createTime || '',
-      startTime: build.startTime || '',
-      finishTime: build.finishTime || '',
-      logUrl: build.logUrl || '',
-      substitutions: build.substitutions || {},
-      sourceProvenance: build.sourceProvenance,
-    }));
+    // TODO: Replace with actual backend API call
+    console.warn('fetchBuildsForTrigger: Backend implementation required');
+    return [];
   } catch (error) {
     console.error('Error fetching builds for trigger:', error);
     return [];
@@ -189,35 +122,15 @@ export async function fetchBuildsForTrigger(triggerId: string, limit: number = 1
 }
 
 // Fetch a specific build by ID
-export async function fetchBuildById(buildId: string): Promise<Build | null> {
-  const client = await getCloudBuildClient();
-  if (!client) {
-    console.warn('Cloud Build client not initialized');
+export async function fetchBuildById(_buildId: string): Promise<Build | null> {
+  if (!isBackendConfigured()) {
     return null;
   }
 
-  const { projectId } = getGCPConfig();
-  if (!projectId) return null;
-
   try {
-    const [build] = await client.getBuild({
-      projectId,
-      id: buildId,
-    });
-
-    if (!build) return null;
-
-    return {
-      id: build.id || '',
-      projectId: build.projectId || '',
-      status: build.status || 'STATUS_UNKNOWN',
-      createTime: build.createTime || '',
-      startTime: build.startTime || '',
-      finishTime: build.finishTime || '',
-      logUrl: build.logUrl || '',
-      substitutions: build.substitutions || {},
-      sourceProvenance: build.sourceProvenance,
-    } as Build;
+    // TODO: Replace with actual backend API call
+    console.warn('fetchBuildById: Backend implementation required');
+    return null;
   } catch (error) {
     console.error('Error fetching build by ID:', error);
     return null;
@@ -225,33 +138,15 @@ export async function fetchBuildById(buildId: string): Promise<Build | null> {
 }
 
 // Fetch all recent builds (not filtered by trigger)
-export async function fetchAllBuilds(limit: number = 20): Promise<Build[]> {
-  const client = await getCloudBuildClient();
-  if (!client) {
-    console.warn('Cloud Build client not initialized');
+export async function fetchAllBuilds(_limit: number = 20): Promise<Build[]> {
+  if (!isBackendConfigured()) {
     return [];
   }
 
-  const { projectId } = getGCPConfig();
-  if (!projectId) return [];
-
   try {
-    const [builds] = await client.listBuilds({
-      projectId,
-      pageSize: limit,
-    });
-
-    return (builds || []).map((build: any) => ({
-      id: build.id || '',
-      projectId: build.projectId || '',
-      status: build.status || 'STATUS_UNKNOWN',
-      createTime: build.createTime || '',
-      startTime: build.startTime || '',
-      finishTime: build.finishTime || '',
-      logUrl: build.logUrl || '',
-      substitutions: build.substitutions || {},
-      sourceProvenance: build.sourceProvenance,
-    }));
+    // TODO: Replace with actual backend API call
+    console.warn('fetchAllBuilds: Backend implementation required');
+    return [];
   } catch (error) {
     console.error('Error fetching all builds:', error);
     return [];
@@ -259,42 +154,15 @@ export async function fetchAllBuilds(limit: number = 20): Promise<Build[]> {
 }
 
 // Trigger a build (requires Cloud Build Editor role)
-export async function triggerBuild(triggerId: string, branchName: string): Promise<Build | null> {
-  const client = await getCloudBuildClient();
-  if (!client) {
-    console.warn('Cloud Build client not initialized');
+export async function triggerBuild(_triggerId: string, _branchName: string): Promise<Build | null> {
+  if (!isBackendConfigured()) {
     return null;
   }
 
-  const { projectId } = getGCPConfig();
-  if (!projectId) return null;
-
   try {
-    const [operation] = await client.runBuildTrigger({
-      projectId,
-      triggerId: triggerId,
-      source: {
-        projectId,
-        branchName: branchName,
-      },
-    });
-
-    // Wait for the operation to complete and get the build
-    const [build] = await operation.promise();
-
-    if (!build) return null;
-
-    return {
-      id: build.id || '',
-      projectId: build.projectId || '',
-      status: build.status || 'STATUS_UNKNOWN',
-      createTime: build.createTime || '',
-      startTime: build.startTime || '',
-      finishTime: build.finishTime || '',
-      logUrl: build.logUrl || '',
-      substitutions: build.substitutions || {},
-      sourceProvenance: build.sourceProvenance,
-    } as Build;
+    // TODO: Replace with actual backend API call
+    console.warn('triggerBuild: Backend implementation required');
+    return null;
   } catch (error) {
     console.error('Error triggering build:', error);
     return null;
@@ -302,20 +170,22 @@ export async function triggerBuild(triggerId: string, branchName: string): Promi
 }
 
 // Helper: Format build status for display
-export function formatBuildStatus(status: Build['status']): {
+export function formatBuildStatus(
+  status: Build['status']
+): {
   label: string;
   color: string;
   icon: string;
 } {
   const statusMap = {
-    'STATUS_UNKNOWN': { label: 'Unknown', color: 'gray', icon: '❓' },
-    'QUEUED': { label: 'Queued', color: 'yellow', icon: '⏳' },
-    'WORKING': { label: 'Running', color: 'blue', icon: '🔄' },
-    'SUCCESS': { label: 'Success', color: 'green', icon: '✅' },
-    'FAILURE': { label: 'Failed', color: 'red', icon: '❌' },
-    'INTERNAL_ERROR': { label: 'Error', color: 'red', icon: '❌' },
-    'TIMEOUT': { label: 'Timeout', color: 'orange', icon: '⏱️' },
-    'CANCELLED': { label: 'Cancelled', color: 'gray', icon: '🚫' },
+    STATUS_UNKNOWN: { label: 'Unknown', color: 'gray', icon: '❓' },
+    QUEUED: { label: 'Queued', color: 'yellow', icon: '⏳' },
+    WORKING: { label: 'Running', color: 'blue', icon: '🔄' },
+    SUCCESS: { label: 'Success', color: 'green', icon: '✅' },
+    FAILURE: { label: 'Failed', color: 'red', icon: '❌' },
+    INTERNAL_ERROR: { label: 'Error', color: 'red', icon: '❌' },
+    TIMEOUT: { label: 'Timeout', color: 'orange', icon: '⏱️' },
+    CANCELLED: { label: 'Cancelled', color: 'gray', icon: '🚫' },
   };
   return statusMap[status] || statusMap['STATUS_UNKNOWN'];
 }
@@ -335,23 +205,28 @@ export function getBuildDuration(build: Build): number | null {
 
 // Sync GCP build triggers to Tandem resources
 // This function can be called from the admin panel to import triggers as resources
-export async function syncTriggersToResources(): Promise<{
-  success: number;
-  skipped: number;
-  errors: string[];
-}> {
-  const result = {
+export async function syncTriggersToResources(): Promise<SyncResult> {
+  const result: SyncResult = {
     success: 0,
     skipped: 0,
-    errors: [] as string[],
+    errors: [],
   };
 
+  if (!isBackendConfigured()) {
+    result.errors.push(
+      'Backend API not configured. Cloud Build integration requires a backend service. See CLOUD_BUILD_SETUP.md for implementation guide.'
+    );
+    return result;
+  }
+
   try {
-    // 1. Fetch all triggers from GCP
+    // 1. Fetch all triggers from GCP (via backend)
     const triggers = await fetchBuildTriggers();
 
     if (triggers.length === 0) {
-      result.errors.push('No build triggers found in GCP');
+      result.errors.push(
+        'No build triggers found. This could mean: (1) Backend not implemented, (2) No triggers in GCP, or (3) Configuration error.'
+      );
       return result;
     }
 
@@ -418,19 +293,15 @@ export async function syncTriggersToResources(): Promise<{
 export const GCPCloudBuildIntegration: IntegrationProvider = {
   type: 'gcp-cloud-build',
   name: 'Google Cloud Build',
-  description: 'Sync build triggers from Google Cloud Build as bookable resources',
+  description:
+    'Sync build triggers from Google Cloud Build as bookable resources (requires backend implementation)',
 
   isConfigured(): boolean {
     const config = getIntegrationConfig('gcp-cloud-build');
     if (!config || !config.enabled) return false;
 
     const { projectId, serviceAccountKey } = config.settings;
-    return !!(
-      projectId &&
-      projectId !== 'your-gcp-project-id' &&
-      serviceAccountKey &&
-      serviceAccountKey.trim().length > 0
-    );
+    return !!(projectId && projectId.trim().length > 0 && serviceAccountKey && serviceAccountKey.trim().length > 0);
   },
 
   validateConfig(settings: Record<string, any>): { valid: boolean; errors: string[] } {
@@ -438,13 +309,6 @@ export const GCPCloudBuildIntegration: IntegrationProvider = {
 
     if (!settings.projectId || settings.projectId.trim() === '') {
       errors.push('Project ID is required');
-    }
-
-    if (
-      settings.projectId === 'your-gcp-project-id' ||
-      settings.projectId === DEFAULT_GCP_PROJECT_ID
-    ) {
-      errors.push('Please enter your actual GCP Project ID');
     }
 
     if (!settings.serviceAccountKey || settings.serviceAccountKey.trim() === '') {
@@ -466,8 +330,15 @@ export const GCPCloudBuildIntegration: IntegrationProvider = {
       }
     }
 
+    // Warn about backend requirement
+    if (!isBackendConfigured()) {
+      errors.push(
+        'Warning: Backend API not configured (VITE_BACKEND_API_URL). This integration will not sync until you implement a backend service. See CLOUD_BUILD_SETUP.md'
+      );
+    }
+
     return {
-      valid: errors.length === 0,
+      valid: errors.filter((e) => !e.startsWith('Warning:')).length === 0,
       errors,
     };
   },
@@ -493,7 +364,7 @@ export const GCPCloudBuildIntegration: IntegrationProvider = {
         placeholder: '{"type":"service_account","project_id":"...","private_key":"..."}',
         required: true,
         description:
-          'Service account JSON key with Cloud Build Viewer role. This is stored temporarily in your browser\'s localStorage.',
+          'Service account JSON key with Cloud Build Viewer role. Stored in browser localStorage. Note: Cloud Build API requires a backend - this is for configuration only.',
       },
     ];
   },
