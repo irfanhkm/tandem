@@ -3,9 +3,12 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../services/supabase';
 import type { Resource, ResourceFormData } from '../types';
 import { Header } from '../components/Header';
+import CloudBuildHistory from '../components/CloudBuildHistory';
+
+type TabType = 'resources' | 'cloud-build';
 
 export const Admin = () => {
-
+  const [activeTab, setActiveTab] = useState<TabType>('resources');
   const [resources, setResources] = useState<Resource[]>([]);
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -21,6 +24,27 @@ export const Admin = () => {
     if (true) {
       fetchResources();
     }
+
+    // Subscribe to realtime changes
+    const subscribeToChanges = () => {
+      const resourcesChannel = supabase
+        .channel('admin-resources-changes')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'resources' },
+          () => {
+            fetchResources();
+          }
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(resourcesChannel);
+      };
+    };
+
+    const cleanup = subscribeToChanges();
+    return cleanup;
   }, []);
 
   const fetchResources = async () => {
@@ -181,17 +205,46 @@ export const Admin = () => {
 
       <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         <div className="px-4 sm:px-0">
-          <div className="flex justify-between items-center mb-6">
-            <h1 className="text-2xl font-bold text-gray-900">Admin Panel - Resources</h1>
-            {!showForm && (
+          {/* Tab Navigation */}
+          <div className="border-b border-gray-200 mb-6">
+            <nav className="-mb-px flex space-x-8">
               <button
-                onClick={() => setShowForm(true)}
-                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                onClick={() => setActiveTab('resources')}
+                className={`${
+                  activeTab === 'resources'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
               >
-                Add Resource
+                Resources
               </button>
-            )}
+              <button
+                onClick={() => setActiveTab('cloud-build')}
+                className={`${
+                  activeTab === 'cloud-build'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
+              >
+                Cloud Build
+              </button>
+            </nav>
           </div>
+
+          {/* Resources Tab */}
+          {activeTab === 'resources' && (
+            <>
+              <div className="flex justify-between items-center mb-6">
+                <h1 className="text-2xl font-bold text-gray-900">Resources Management</h1>
+                {!showForm && (
+                  <button
+                    onClick={() => setShowForm(true)}
+                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  >
+                    Add Resource
+                  </button>
+                )}
+              </div>
 
           {error && (
             <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
@@ -257,86 +310,93 @@ export const Admin = () => {
             </div>
           )}
 
-          {/* Resources Table */}
-          <div className="bg-white shadow overflow-hidden sm:rounded-lg">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th
-                    scope="col"
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                  >
-                    Resource Name
-                  </th>
-                  <th
-                    scope="col"
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                  >
-                    Labels
-                  </th>
-                  <th
-                    scope="col"
-                    className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider"
-                  >
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {loading ? (
-                  <tr>
-                    <td colSpan={3} className="px-6 py-4 text-center">
-                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-                    </td>
-                  </tr>
-                ) : resources.length === 0 ? (
-                  <tr>
-                    <td colSpan={3} className="px-6 py-4 text-center text-sm text-gray-500">
-                      No resources found. Add your first resource!
-                    </td>
-                  </tr>
-                ) : (
-                  resources.map((resource) => (
-                    <tr key={resource.id}>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-gray-900">{resource.name}</div>
-                      </td>
-                      <td className="px-6 py-4">
-                        {resource.labels ? (
-                          <div className="flex flex-wrap gap-1">
-                            {resource.labels.split(',').map((label, idx) => (
-                              <span
-                                key={idx}
-                                className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800"
-                              >
-                                {label.trim()}
-                              </span>
-                            ))}
-                          </div>
-                        ) : (
-                          <span className="text-sm text-gray-400">No labels</span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <button
-                          onClick={() => handleEdit(resource)}
-                          className="text-blue-600 hover:text-blue-900 mr-4"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => handleDelete(resource)}
-                          className="text-red-600 hover:text-red-900"
-                        >
-                          Delete
-                        </button>
-                      </td>
+              {/* Resources Table */}
+              <div className="bg-white shadow overflow-hidden sm:rounded-lg">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th
+                        scope="col"
+                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                      >
+                        Resource Name
+                      </th>
+                      <th
+                        scope="col"
+                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                      >
+                        Labels
+                      </th>
+                      <th
+                        scope="col"
+                        className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider"
+                      >
+                        Actions
+                      </th>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {loading ? (
+                      <tr>
+                        <td colSpan={3} className="px-6 py-4 text-center">
+                          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                        </td>
+                      </tr>
+                    ) : resources.length === 0 ? (
+                      <tr>
+                        <td colSpan={3} className="px-6 py-4 text-center text-sm text-gray-500">
+                          No resources found. Add your first resource!
+                        </td>
+                      </tr>
+                    ) : (
+                      resources.map((resource) => (
+                        <tr key={resource.id}>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm font-medium text-gray-900">{resource.name}</div>
+                          </td>
+                          <td className="px-6 py-4">
+                            {resource.labels ? (
+                              <div className="flex flex-wrap gap-1">
+                                {resource.labels.split(',').map((label, idx) => (
+                                  <span
+                                    key={idx}
+                                    className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800"
+                                  >
+                                    {label.trim()}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : (
+                              <span className="text-sm text-gray-400">No labels</span>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                            <button
+                              onClick={() => handleEdit(resource)}
+                              className="text-blue-600 hover:text-blue-900 mr-4"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              onClick={() => handleDelete(resource)}
+                              className="text-red-600 hover:text-red-900"
+                            >
+                              Delete
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+
+          {/* Cloud Build Tab */}
+          {activeTab === 'cloud-build' && (
+            <CloudBuildHistory autoRefresh={true} refreshInterval={30000} />
+          )}
         </div>
       </main>
     </div>

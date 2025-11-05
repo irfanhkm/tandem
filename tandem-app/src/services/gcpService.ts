@@ -1,15 +1,66 @@
 // Google Cloud Build Integration Service
-// Phase 2: This service will fetch build triggers and build information from GCP
+// This service fetches build triggers and build information from GCP
 
 // Note: This requires Google Cloud Build API access and authentication
-// For Phase 2, we'll need to:
-// 1. Enable Cloud Build API in GCP
+// Setup instructions:
+// 1. Enable Cloud Build API in GCP Console
 // 2. Create a service account with Cloud Build Viewer role
-// 3. Set up OAuth or service account credentials
-// 4. Install @google-cloud/cloudbuild package
+// 3. Download service account key and set VITE_GCP_SERVICE_ACCOUNT_KEY
+// 4. Set VITE_GCP_PROJECT_ID in your .env file
 
-// @ts-ignore - Phase 2 feature
+// IMPORTANT: Google Cloud libraries are Node.js-only and cannot run in browsers
+// This code requires a backend proxy in production. See CLOUD_BUILD_SETUP.md
+
+import { supabase } from './supabase';
+
 const GCP_PROJECT_ID = import.meta.env.VITE_GCP_PROJECT_ID;
+const GCP_SERVICE_ACCOUNT_KEY = import.meta.env.VITE_GCP_SERVICE_ACCOUNT_KEY;
+
+// Type definition for CloudBuildClient
+type CloudBuildClient = any;
+
+// Initialize Cloud Build client (browser-safe)
+let cloudBuildClient: CloudBuildClient | null = null;
+let clientInitError: string | null = null;
+
+async function getCloudBuildClient(): Promise<CloudBuildClient | null> {
+  if (clientInitError) {
+    console.warn('Cloud Build client previously failed to initialize:', clientInitError);
+    return null;
+  }
+
+  if (!GCP_PROJECT_ID) {
+    console.error('GCP_PROJECT_ID not configured');
+    return null;
+  }
+
+  if (!cloudBuildClient) {
+    try {
+      // Dynamic import to prevent bundling issues
+      // This will fail in browser environments - that's expected
+      const { CloudBuildClient } = await import('@google-cloud/cloudbuild');
+
+      // Parse service account key if provided as JSON string
+      const credentials = GCP_SERVICE_ACCOUNT_KEY
+        ? JSON.parse(GCP_SERVICE_ACCOUNT_KEY)
+        : undefined;
+
+      cloudBuildClient = new CloudBuildClient({
+        projectId: GCP_PROJECT_ID,
+        credentials,
+      });
+
+      console.log('Cloud Build client initialized successfully');
+    } catch (error) {
+      const errorMsg = 'Cloud Build integration requires a backend service. See CLOUD_BUILD_SETUP.md';
+      clientInitError = errorMsg;
+      console.warn(errorMsg, error);
+      return null;
+    }
+  }
+
+  return cloudBuildClient;
+}
 
 export interface BuildTrigger {
   id: string;
@@ -41,66 +92,174 @@ export interface Build {
   };
 }
 
-// Phase 2: Fetch all build triggers from GCP
+// Fetch all build triggers from GCP
 export async function fetchBuildTriggers(): Promise<BuildTrigger[]> {
-  // TODO: Implement using Google Cloud Build API
-  // const { CloudBuildClient } = require('@google-cloud/cloudbuild');
-  // const client = new CloudBuildClient();
-  // const [triggers] = await client.listBuildTriggers({ projectId: GCP_PROJECT_ID });
-  // return triggers;
+  const client = await getCloudBuildClient();
+  if (!client) {
+    console.warn('Cloud Build client not initialized');
+    return [];
+  }
 
-  console.warn('fetchBuildTriggers() not yet implemented - Phase 2 feature');
-  return [];
+  try {
+    const [triggers] = await client.listBuildTriggers({
+      projectId: GCP_PROJECT_ID,
+    });
+
+    return (triggers || []).map((trigger: any) => ({
+      id: trigger.id || '',
+      name: trigger.name || '',
+      description: trigger.description || '',
+      filename: trigger.filename || '',
+      github: trigger.github
+        ? {
+            owner: trigger.github.owner || '',
+            name: trigger.github.name || '',
+            branch: trigger.github.push?.branch || '',
+          }
+        : undefined,
+      createTime: trigger.createTime || '',
+      disabled: trigger.disabled || false,
+    }));
+  } catch (error) {
+    console.error('Error fetching build triggers:', error);
+    return [];
+  }
 }
 
-// Phase 2: Fetch latest builds for a specific trigger
-export async function fetchBuildsForTrigger(_triggerId: string, _limit: number = 5): Promise<Build[]> {
-  // TODO: Implement using Google Cloud Build API
-  // const { CloudBuildClient } = require('@google-cloud/cloudbuild');
-  // const client = new CloudBuildClient();
-  // const [builds] = await client.listBuilds({
-  //   projectId: GCP_PROJECT_ID,
-  //   filter: `trigger_id="${triggerId}"`,
-  //   pageSize: limit,
-  // });
-  // return builds;
+// Fetch latest builds for a specific trigger
+export async function fetchBuildsForTrigger(triggerId: string, limit: number = 10): Promise<Build[]> {
+  const client = await getCloudBuildClient();
+  if (!client) {
+    console.warn('Cloud Build client not initialized');
+    return [];
+  }
 
-  console.warn('fetchBuildsForTrigger() not yet implemented - Phase 2 feature');
-  return [];
+  try {
+    const [builds] = await client.listBuilds({
+      projectId: GCP_PROJECT_ID,
+      filter: `build_trigger_id="${triggerId}"`,
+      pageSize: limit,
+    });
+
+    return (builds || []).map((build: any) => ({
+      id: build.id || '',
+      projectId: build.projectId || '',
+      status: build.status || 'STATUS_UNKNOWN',
+      createTime: build.createTime || '',
+      startTime: build.startTime || '',
+      finishTime: build.finishTime || '',
+      logUrl: build.logUrl || '',
+      substitutions: build.substitutions || {},
+      sourceProvenance: build.sourceProvenance,
+    }));
+  } catch (error) {
+    console.error('Error fetching builds for trigger:', error);
+    return [];
+  }
 }
 
-// Phase 2: Fetch a specific build by ID
-export async function fetchBuildById(_buildId: string): Promise<Build | null> {
-  // TODO: Implement using Google Cloud Build API
-  // const { CloudBuildClient } = require('@google-cloud/cloudbuild');
-  // const client = new CloudBuildClient();
-  // const [build] = await client.getBuild({
-  //   projectId: GCP_PROJECT_ID,
-  //   id: buildId,
-  // });
-  // return build;
+// Fetch a specific build by ID
+export async function fetchBuildById(buildId: string): Promise<Build | null> {
+  const client = await getCloudBuildClient();
+  if (!client) {
+    console.warn('Cloud Build client not initialized');
+    return null;
+  }
 
-  console.warn('fetchBuildById() not yet implemented - Phase 2 feature');
-  return null;
+  try {
+    const [build] = await client.getBuild({
+      projectId: GCP_PROJECT_ID,
+      id: buildId,
+    });
+
+    if (!build) return null;
+
+    return {
+      id: build.id || '',
+      projectId: build.projectId || '',
+      status: build.status || 'STATUS_UNKNOWN',
+      createTime: build.createTime || '',
+      startTime: build.startTime || '',
+      finishTime: build.finishTime || '',
+      logUrl: build.logUrl || '',
+      substitutions: build.substitutions || {},
+      sourceProvenance: build.sourceProvenance,
+    } as Build;
+  } catch (error) {
+    console.error('Error fetching build by ID:', error);
+    return null;
+  }
 }
 
-// Phase 3: Trigger a build
-export async function triggerBuild(_triggerId: string, _branchName: string): Promise<Build | null> {
-  // TODO: Implement using Google Cloud Build API
-  // const { CloudBuildClient } = require('@google-cloud/cloudbuild');
-  // const client = new CloudBuildClient();
-  // const [operation] = await client.runBuildTrigger({
-  //   projectId: GCP_PROJECT_ID,
-  //   triggerId: triggerId,
-  //   source: {
-  //     branchName: branchName,
-  //   },
-  // });
-  // const [build] = await operation.promise();
-  // return build;
+// Fetch all recent builds (not filtered by trigger)
+export async function fetchAllBuilds(limit: number = 20): Promise<Build[]> {
+  const client = await getCloudBuildClient();
+  if (!client) {
+    console.warn('Cloud Build client not initialized');
+    return [];
+  }
 
-  console.warn('triggerBuild() not yet implemented - Phase 3 feature');
-  return null;
+  try {
+    const [builds] = await client.listBuilds({
+      projectId: GCP_PROJECT_ID,
+      pageSize: limit,
+    });
+
+    return (builds || []).map((build: any) => ({
+      id: build.id || '',
+      projectId: build.projectId || '',
+      status: build.status || 'STATUS_UNKNOWN',
+      createTime: build.createTime || '',
+      startTime: build.startTime || '',
+      finishTime: build.finishTime || '',
+      logUrl: build.logUrl || '',
+      substitutions: build.substitutions || {},
+      sourceProvenance: build.sourceProvenance,
+    }));
+  } catch (error) {
+    console.error('Error fetching all builds:', error);
+    return [];
+  }
+}
+
+// Trigger a build (requires Cloud Build Editor role)
+export async function triggerBuild(triggerId: string, branchName: string): Promise<Build | null> {
+  const client = await getCloudBuildClient();
+  if (!client) {
+    console.warn('Cloud Build client not initialized');
+    return null;
+  }
+
+  try {
+    const [operation] = await client.runBuildTrigger({
+      projectId: GCP_PROJECT_ID,
+      triggerId: triggerId,
+      source: {
+        projectId: GCP_PROJECT_ID,
+        branchName: branchName,
+      },
+    });
+
+    // Wait for the operation to complete and get the build
+    const [build] = await operation.promise();
+
+    if (!build) return null;
+
+    return {
+      id: build.id || '',
+      projectId: build.projectId || '',
+      status: build.status || 'STATUS_UNKNOWN',
+      createTime: build.createTime || '',
+      startTime: build.startTime || '',
+      finishTime: build.finishTime || '',
+      logUrl: build.logUrl || '',
+      substitutions: build.substitutions || {},
+      sourceProvenance: build.sourceProvenance,
+    } as Build;
+  } catch (error) {
+    console.error('Error triggering build:', error);
+    return null;
+  }
 }
 
 // Helper: Format build status for display
@@ -135,19 +294,80 @@ export function getBuildDuration(build: Build): number | null {
   return Math.round((finish - start) / 1000);
 }
 
-// Phase 2: Sync GCP build triggers to Tandem resources
+// Sync GCP build triggers to Tandem resources
 // This function can be called from the admin panel to import triggers as resources
 export async function syncTriggersToResources(): Promise<{
   success: number;
   skipped: number;
   errors: string[];
 }> {
-  // TODO: Implement
-  // 1. Fetch all triggers from GCP
-  // 2. For each trigger, check if resource exists in Supabase
-  // 3. If not, create new resource with trigger name
-  // 4. Return summary of sync operation
+  const result = {
+    success: 0,
+    skipped: 0,
+    errors: [] as string[],
+  };
 
-  console.warn('syncTriggersToResources() not yet implemented - Phase 2 feature');
-  return { success: 0, skipped: 0, errors: ['Not implemented yet'] };
+  try {
+    // 1. Fetch all triggers from GCP
+    const triggers = await fetchBuildTriggers();
+
+    if (triggers.length === 0) {
+      result.errors.push('No build triggers found in GCP');
+      return result;
+    }
+
+    // 2. For each trigger, check if resource exists in Supabase
+    for (const trigger of triggers) {
+      try {
+        // Check if resource with this name already exists
+        const { data: existingResource, error: fetchError } = await supabase
+          .from('resources')
+          .select('id')
+          .eq('name', trigger.name)
+          .is('deleted_at', null)
+          .single();
+
+        if (fetchError && fetchError.code !== 'PGRST116') {
+          // PGRST116 = not found, which is expected
+          result.errors.push(`Error checking resource ${trigger.name}: ${fetchError.message}`);
+          continue;
+        }
+
+        if (existingResource) {
+          result.skipped++;
+          continue;
+        }
+
+        // 3. Create new resource with trigger name
+        const labels = ['cloud-build', 'gcp'];
+        if (trigger.github) {
+          labels.push('github');
+        }
+        if (trigger.disabled) {
+          labels.push('disabled');
+        }
+
+        const { error: insertError } = await supabase.from('resources').insert({
+          name: trigger.name,
+          labels: labels.join(','),
+        });
+
+        if (insertError) {
+          result.errors.push(`Error creating resource ${trigger.name}: ${insertError.message}`);
+          continue;
+        }
+
+        result.success++;
+      } catch (error) {
+        result.errors.push(
+          `Error processing trigger ${trigger.name}: ${error instanceof Error ? error.message : String(error)}`
+        );
+      }
+    }
+
+    return result;
+  } catch (error) {
+    result.errors.push(`Fatal error: ${error instanceof Error ? error.message : String(error)}`);
+    return result;
+  }
 }
