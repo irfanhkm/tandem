@@ -20,19 +20,21 @@ export const Dashboard = () => {
   const fetchResources = async () => {
     try {
       setLoading(true);
-      // Fetch resources with their current bookings
+      // Fetch resources with their current bookings (exclude soft-deleted)
       const { data: resourcesData, error: resourcesError } = await supabase
         .from('resources')
         .select('*')
+        .is('deleted_at', null)
         .order('name');
 
       if (resourcesError) throw resourcesError;
 
-      // Fetch active bookings (no user join, just booked_by name)
+      // Fetch active bookings (no user join, just booked_by name, exclude soft-deleted)
       const { data: bookingsData, error: bookingsError } = await supabase
         .from('bookings')
         .select('*')
         .is('released_at', null)
+        .is('deleted_at', null)
         .gt('expires_at', new Date().toISOString());
 
       if (bookingsError) throw bookingsError;

@@ -5,6 +5,7 @@ export interface Resource {
   labels?: string;
   created_at: string;
   updated_at: string;
+  deleted_at?: string;
   current_booking?: Booking;
   status: 'FREE' | 'LOCKED';
 }
@@ -20,11 +21,12 @@ export interface Booking {
   expires_at: string;
   created_at: string;
   released_at?: string;
+  deleted_at?: string;
   resource?: Resource;
 }
 
 // Booking History types
-export type BookingAction = 'BOOK' | 'EXTEND' | 'RELEASE' | 'EXPIRED' | 'EDIT';
+export type BookingAction = 'BOOK' | 'EXTEND' | 'RELEASE' | 'EXPIRED' | 'EDIT' | 'DELETE';
 
 export interface BookingHistory {
   id: string;
