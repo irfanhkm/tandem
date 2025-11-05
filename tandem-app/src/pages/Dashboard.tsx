@@ -2,14 +2,13 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../services/supabase';
 import type { Resource } from '../types';
 import { ResourceTable } from '../components/ResourceTable';
-import { BookingModal } from '../components/BookingModal';
+import { BookingForm } from '../components/BookingForm';
 import { Header } from '../components/Header';
 
 export const Dashboard = () => {
   const [resources, setResources] = useState<Resource[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [selectedResource, setSelectedResource] = useState<Resource | null>(null);
-  const [showBookingModal, setShowBookingModal] = useState(false);
   const [labelFilter, setLabelFilter] = useState<string>('all');
   const [availableLabels, setAvailableLabels] = useState<string[]>([]);
 
@@ -100,17 +99,15 @@ export const Dashboard = () => {
 
   const handleResourceClick = (resource: Resource) => {
     setSelectedResource(resource);
-    setShowBookingModal(true);
   };
 
-  const handleModalClose = () => {
-    setShowBookingModal(false);
+  const handleFormClose = () => {
     setSelectedResource(null);
   };
 
   const handleBookingSuccess = () => {
     fetchResources();
-    handleModalClose();
+    handleFormClose();
   };
 
   const filteredResources = resources.filter((resource) => {
@@ -118,41 +115,46 @@ export const Dashboard = () => {
     return resource.labels?.split(',').map((l) => l.trim()).includes(labelFilter);
   });
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-gray-50">
       <Header />
 
       <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        {/* Filters */}
-        <div className="px-4 py-4 sm:px-0">
-          <div className="flex items-center space-x-4">
-            <label className="text-sm font-medium text-gray-700">Filter by label:</label>
-            <select
-              value={labelFilter}
-              onChange={(e) => setLabelFilter(e.target.value)}
-              className="rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-            >
-              <option value="all">All</option>
-              {availableLabels.map((label) => (
-                <option key={label} value={label}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        {/* Resources Table */}
         <div className="px-4 sm:px-0">
-          {filteredResources.length === 0 ? (
+          {/* Filters */}
+          <div className="py-4">
+            <div className="flex items-center space-x-4">
+              <label className="text-sm font-medium text-gray-700">Filter by label:</label>
+              <select
+                value={labelFilter}
+                onChange={(e) => setLabelFilter(e.target.value)}
+                className="rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+              >
+                <option value="all">All</option>
+                {availableLabels.map((label) => (
+                  <option key={label} value={label}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Booking Form - Inline */}
+          {selectedResource && (
+            <BookingForm
+              resource={selectedResource}
+              onClose={handleFormClose}
+              onSuccess={handleBookingSuccess}
+            />
+          )}
+
+          {/* Resources Table */}
+          {loading ? (
+            <div className="bg-white shadow rounded-lg p-8 text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+            </div>
+          ) : filteredResources.length === 0 ? (
             <div className="bg-white shadow rounded-lg p-8 text-center">
               <p className="text-gray-500">No resources found.</p>
             </div>
@@ -164,15 +166,6 @@ export const Dashboard = () => {
           )}
         </div>
       </main>
-
-      {/* Booking Modal */}
-      {showBookingModal && selectedResource && (
-        <BookingModal
-          resource={selectedResource}
-          onClose={handleModalClose}
-          onSuccess={handleBookingSuccess}
-        />
-      )}
     </div>
   );
 };

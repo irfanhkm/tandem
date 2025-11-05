@@ -5,9 +5,9 @@ import type { Resource, ResourceFormData } from '../types';
 import { Header } from '../components/Header';
 
 export const Admin = () => {
-  
+
   const [resources, setResources] = useState<Resource[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editingResource, setEditingResource] = useState<Resource | null>(null);
   const [formData, setFormData] = useState<ResourceFormData>({
@@ -143,14 +143,6 @@ export const Admin = () => {
     setError(null);
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-gray-50">
       <Header />
@@ -259,7 +251,13 @@ export const Admin = () => {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {resources.length === 0 ? (
+                {loading ? (
+                  <tr>
+                    <td colSpan={3} className="px-6 py-4 text-center">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                    </td>
+                  </tr>
+                ) : resources.length === 0 ? (
                   <tr>
                     <td colSpan={3} className="px-6 py-4 text-center text-sm text-gray-500">
                       No resources found. Add your first resource!

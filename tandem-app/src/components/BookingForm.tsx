@@ -4,16 +4,16 @@ import { supabase } from '../services/supabase';
 import { getExpiryPresets, formatDateTime } from '../utils/dateUtils';
 import { addHours } from 'date-fns';
 
-interface BookingModalProps {
+interface BookingFormProps {
   resource: Resource;
   onClose: () => void;
   onSuccess: () => void;
 }
 
-type ModalMode = 'view' | 'book' | 'extend' | 'edit';
+type FormMode = 'view' | 'book' | 'extend' | 'edit';
 
-export const BookingModal = ({ resource, onClose, onSuccess }: BookingModalProps) => {
-  const [mode, setMode] = useState<ModalMode>(resource.status === 'FREE' ? 'book' : 'view');
+export const BookingForm = ({ resource, onClose, onSuccess }: BookingFormProps) => {
+  const [mode, setMode] = useState<FormMode>(resource.status === 'FREE' ? 'book' : 'view');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -196,16 +196,8 @@ export const BookingModal = ({ resource, onClose, onSuccess }: BookingModalProps
   };
 
   return (
-    <div className="fixed inset-0 z-10 overflow-y-auto">
-      <div className="flex min-h-screen items-center justify-center px-4 pt-4 pb-20 text-center sm:block sm:p-0">
-        {/* Background overlay */}
-        <div
-          className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"
-          onClick={onClose}
-        ></div>
-
-        {/* Modal panel */}
-        <div className="inline-block align-bottom bg-white rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full sm:p-6">
+    <div className="bg-white shadow rounded-lg p-6 mb-6">
+      <div>
           <div className="mb-4">
             <h3 className="text-lg leading-6 font-medium text-gray-900">
               {resource.name}
@@ -515,7 +507,6 @@ export const BookingModal = ({ resource, onClose, onSuccess }: BookingModalProps
               </div>
             </div>
           )}
-        </div>
       </div>
     </div>
   );
