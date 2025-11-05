@@ -1,5 +1,21 @@
--- Migration: Add Soft Delete Support
--- This migration adds deleted_at columns to resources and bookings tables
+-- ========================================
+-- Migration: V2 - Add Soft Delete Support
+-- ========================================
+-- Description: Adds soft delete functionality to prevent permanent data loss
+-- Author: Tandem Team
+-- Date: 2024-11-05
+-- Dependencies: V1_initial_schema.sql
+--
+-- This migration adds:
+-- - deleted_at column to resources table
+-- - deleted_at column to bookings table
+-- - Indexes on deleted_at columns for performance
+-- - 'DELETE' action to booking_history constraint
+--
+-- Impact: Changes delete behavior from hard delete to soft delete.
+--         Queries must filter WHERE deleted_at IS NULL to exclude deleted records.
+-- ========================================
+
 -- Run this in Supabase SQL Editor if your database already exists
 
 -- Add deleted_at column to resources table

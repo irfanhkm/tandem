@@ -1,18 +1,19 @@
--- Tandem Database Schema (Complete)
+-- ========================================
+-- Migration: V1 - Initial Schema
+-- ========================================
+-- Description: Initial database schema for Tandem resource booking system
+-- Author: Tandem Team
+-- Date: 2024-11-05
+-- Dependencies: None
 --
--- IMPORTANT: This file contains the complete current schema.
--- For production use, please use the versioned migrations in backend/migrations/
---
--- This file is kept up-to-date with all migrations applied and can be used for:
--- - Quick reference of current schema
--- - Development database setup
--- - Schema documentation
---
--- To set up a new database properly, use the migration files:
--- 1. Run backend/migrations/V1_initial_schema.sql
--- 2. Run backend/migrations/V2_add_soft_delete.sql
--- 3. Continue with any new migrations
---
+-- This migration creates:
+-- - resources table: Manages QA environments/resources
+-- - bookings table: Tracks resource bookings with time-based reservations
+-- - booking_history table: Audit trail for all booking actions
+-- - RLS policies: Row-level security (currently open to all)
+-- - Functions: auto_release_expired_bookings()
+-- ========================================
+
 -- Run this in Supabase SQL Editor to set up the database
 
 -- Enable UUID extension
@@ -24,12 +25,8 @@ CREATE TABLE IF NOT EXISTS public.resources (
   name TEXT NOT NULL UNIQUE,
   labels TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  deleted_at TIMESTAMP WITH TIME ZONE
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
-
--- Index for soft delete queries
-CREATE INDEX idx_resources_deleted_at ON public.resources(deleted_at);
 
 -- Enable Row Level Security (but allow all operations)
 ALTER TABLE public.resources ENABLE ROW LEVEL SECURITY;
@@ -58,7 +55,6 @@ CREATE TABLE IF NOT EXISTS public.bookings (
   expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   released_at TIMESTAMP WITH TIME ZONE,
-  deleted_at TIMESTAMP WITH TIME ZONE,
   CONSTRAINT one_active_booking_per_resource CHECK (released_at IS NULL OR released_at IS NOT NULL)
 );
 
@@ -67,7 +63,6 @@ CREATE INDEX idx_bookings_resource_id ON public.bookings(resource_id);
 CREATE INDEX idx_bookings_booked_by ON public.bookings(booked_by);
 CREATE INDEX idx_bookings_expires_at ON public.bookings(expires_at);
 CREATE INDEX idx_bookings_released_at ON public.bookings(released_at);
-CREATE INDEX idx_bookings_deleted_at ON public.bookings(deleted_at);
 
 -- Unique constraint: one active booking per resource
 CREATE UNIQUE INDEX unique_active_booking_per_resource
@@ -94,7 +89,7 @@ CREATE POLICY "Anyone can delete bookings" ON public.bookings
 CREATE TABLE IF NOT EXISTS public.booking_history (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   booking_id UUID,
-  action TEXT NOT NULL CHECK (action IN ('BOOK', 'EXTEND', 'RELEASE', 'EXPIRED', 'EDIT', 'DELETE')),
+  action TEXT NOT NULL CHECK (action IN ('BOOK', 'EXTEND', 'RELEASE', 'EXPIRED', 'EDIT')),
   resource_id UUID NOT NULL REFERENCES public.resources(id) ON DELETE CASCADE,
   booked_by TEXT NOT NULL,
   branch TEXT NOT NULL,
