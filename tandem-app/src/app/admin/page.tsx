@@ -205,12 +205,12 @@ export default function Admin() {
             <div className="flex space-x-2">
               {!showForm && !showIntegrations && (
                 <>
-                  <button
+                  {/* <button
                     onClick={() => setShowIntegrations(!showIntegrations)}
                     className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                   >
                     ⚙️ Integrations
-                  </button>
+                  </button> */}
                   <button
                     onClick={() => setShowForm(true)}
                     className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
@@ -222,8 +222,8 @@ export default function Admin() {
             </div>
           </div>
 
-          {/* Integrations Section */}
-          {showIntegrations && (
+          {/* Integrations Section - Hidden */}
+          {/* {showIntegrations && (
             <div className="mb-6">
               <div className="flex justify-between items-center mb-4">
                 <div>
@@ -252,12 +252,9 @@ export default function Admin() {
                     // Optionally refresh or update UI
                   }}
                 />
-                {/* Future integrations can be added here */}
-                {/* <IntegrationSettings provider={AWSCodeBuildIntegration} /> */}
-                {/* <IntegrationSettings provider={AzurePipelinesIntegration} /> */}
               </div>
             </div>
-          )}
+          )} */}
 
           {error && (
             <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
