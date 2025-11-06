@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import type { Resource, ResourceFormData } from '@/types';
 import { Header } from '@/components/Header';
+import { Modal } from '@/components/Modal';
 import IntegrationSettings from '@/components/IntegrationSettings';
 import { GCPCloudBuildIntegration } from '@/lib/gcpService';
 
@@ -264,13 +265,15 @@ export default function Admin() {
             </div>
           )}
 
-          {/* Form */}
-          {showForm && (
-            <div className="bg-white shadow rounded-lg p-6 mb-6">
-              <h2 className="text-lg font-medium text-gray-900 mb-4">
-                {editingResource ? 'Edit Resource' : 'Add New Resource'}
-              </h2>
-              <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Form Modal */}
+          <Modal
+            isOpen={showForm}
+            onClose={handleCancel}
+            title={editingResource ? 'Edit Resource' : 'Add New Resource'}
+            subtitle="Manage resource name and labels"
+            maxWidth="lg"
+          >
+            <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700">
                     Resource Name <span className="text-red-500">*</span>
@@ -319,8 +322,7 @@ export default function Admin() {
                   </button>
                 </div>
               </form>
-            </div>
-          )}
+          </Modal>
 
               {/* Resources Table */}
               <div className="bg-white shadow overflow-hidden sm:rounded-lg">
