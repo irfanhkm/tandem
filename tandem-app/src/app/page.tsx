@@ -1,11 +1,13 @@
-import { useEffect, useState } from 'react';
-import { supabase } from '../services/supabase';
-import type { Resource } from '../types';
-import { ResourceTable } from '../components/ResourceTable';
-import { BookingForm } from '../components/BookingForm';
-import { Header } from '../components/Header';
+'use client';
 
-export const Dashboard = () => {
+import { useEffect, useState } from 'react';
+import { supabase } from '@/lib/supabase';
+import type { Resource, Booking } from '@/types';
+import { ResourceTable } from '@/components/ResourceTable';
+import { BookingForm } from '@/components/BookingForm';
+import { Header } from '@/components/Header';
+
+export default function Dashboard() {
   const [resources, setResources] = useState<Resource[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedResource, setSelectedResource] = useState<Resource | null>(null);
@@ -69,26 +71,129 @@ export const Dashboard = () => {
   };
 
   const subscribeToChanges = () => {
-    // Subscribe to changes in bookings table
+    // Subscribe to changes in bookings table with granular updates
     const bookingsChannel = supabase
       .channel('bookings-changes')
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'bookings' },
-        () => {
-          fetchResources();
+        { event: 'INSERT', schema: 'public', table: 'bookings' },
+        (payload) => {
+          // A new booking was created
+          const newBooking = payload.new as Booking;
+          setResources((prev) =>
+            prev.map((resource) => {
+              if (resource.id === newBooking.resource_id) {
+                return {
+                  ...resource,
+                  current_booking: newBooking,
+                  status: 'LOCKED' as const,
+                };
+              }
+              return resource;
+            })
+          );
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'bookings' },
+        (payload) => {
+          // A booking was updated (extended, edited, or released)
+          const updatedBooking = payload.new as Booking;
+          setResources((prev) =>
+            prev.map((resource) => {
+              if (resource.id === updatedBooking.resource_id) {
+                // Check if booking was released
+                if (updatedBooking.released_at) {
+                  return {
+                    ...resource,
+                    current_booking: undefined,
+                    status: 'FREE' as const,
+                  };
+                }
+                // Otherwise update the booking details
+                return {
+                  ...resource,
+                  current_booking: updatedBooking,
+                  status: 'LOCKED' as const,
+                };
+              }
+              return resource;
+            })
+          );
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'DELETE', schema: 'public', table: 'bookings' },
+        (payload) => {
+          // A booking was deleted
+          const deletedBooking = payload.old as Booking;
+          setResources((prev) =>
+            prev.map((resource) => {
+              if (resource.id === deletedBooking.resource_id) {
+                return {
+                  ...resource,
+                  current_booking: undefined,
+                  status: 'FREE' as const,
+                };
+              }
+              return resource;
+            })
+          );
         }
       )
       .subscribe();
 
-    // Subscribe to changes in resources table
+    // Subscribe to changes in resources table with granular updates
     const resourcesChannel = supabase
       .channel('resources-changes')
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'resources' },
+        { event: 'INSERT', schema: 'public', table: 'resources' },
         () => {
+          // New resource added - refetch to get full data with bookings
           fetchResources();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'resources' },
+        (payload) => {
+          // Resource updated (name or labels changed)
+          const updatedResource = payload.new;
+          setResources((prev) =>
+            prev.map((resource) => {
+              if (resource.id === updatedResource.id) {
+                return {
+                  ...resource,
+                  name: updatedResource.name,
+                  labels: updatedResource.labels,
+                  updated_at: updatedResource.updated_at,
+                };
+              }
+              return resource;
+            })
+          );
+          // Update available labels
+          const labels = new Set<string>();
+          resources.forEach((resource) => {
+            if (resource.labels) {
+              resource.labels.split(',').forEach((label: string) => {
+                labels.add(label.trim());
+              });
+            }
+          });
+          setAvailableLabels(Array.from(labels));
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'DELETE', schema: 'public', table: 'resources' },
+        (payload) => {
+          // Resource deleted - remove from list
+          const deletedResource = payload.old;
+          setResources((prev) => prev.filter((r) => r.id !== deletedResource.id));
         }
       )
       .subscribe();
@@ -170,4 +275,4 @@ export const Dashboard = () => {
       </main>
     </div>
   );
-};
+}
