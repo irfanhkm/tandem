@@ -48,6 +48,27 @@ export const BookingForm = ({ resource, onClose, onSuccess }: BookingFormProps) 
       setLoading(true);
       setError(null);
 
+      // Pre-check: Verify no active booking exists for this resource
+      const { data: existingBookings, error: checkError } = await supabase
+        .from('bookings')
+        .select('id, booked_by')
+        .eq('resource_id', resource.id)
+        .is('released_at', null)
+        .is('deleted_at', null)
+        .gt('expires_at', new Date().toISOString());
+
+      if (checkError) throw checkError;
+
+      if (existingBookings && existingBookings.length > 0) {
+        // Resource is already booked
+        setError(`This resource was just booked by ${existingBookings[0].booked_by}. Please refresh and try another resource.`);
+        // Auto-refresh after 2 seconds to show updated state
+        setTimeout(() => {
+          onSuccess();
+        }, 2000);
+        return;
+      }
+
       // Create booking - let database handle created_at with default
       const { data: booking, error: bookingError } = await supabase
         .from('bookings')
@@ -62,7 +83,18 @@ export const BookingForm = ({ resource, onClose, onSuccess }: BookingFormProps) 
         .select()
         .single();
 
-      if (bookingError) throw bookingError;
+      if (bookingError) {
+        // Handle unique constraint violation specifically
+        if (bookingError.message.includes('unique_active_booking_per_resource')) {
+          setError('This resource was just booked by someone else. Refreshing...');
+          // Auto-refresh after 1 second to show updated state
+          setTimeout(() => {
+            onSuccess();
+          }, 1000);
+          return;
+        }
+        throw bookingError;
+      }
 
       // Log to history
       await supabase.from('booking_history').insert({
