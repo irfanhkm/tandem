@@ -35,7 +35,7 @@ export const BookingForm = ({ resource, onClose, onSuccess }: BookingFormProps) 
 
   const handleBook = async () => {
     if (!bookedBy.trim()) {
-      setError('Your name is required');
+      setError('Your name/team is required');
       return;
     }
 
@@ -353,7 +353,7 @@ export const BookingForm = ({ resource, onClose, onSuccess }: BookingFormProps) 
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700">
-                  Your Name <span className="text-red-500">*</span>
+                  Your Name / Team <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
