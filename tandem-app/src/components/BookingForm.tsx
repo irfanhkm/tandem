@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import type { Resource } from '../types';
 import { supabase } from '../lib/supabase';
-import { getExpiryPresets, formatDateTime } from '../utils/dateUtils';
+import { getExpiryPresets, formatDateTime, toLocalDateTimeInputValue } from '../utils/dateUtils';
 import { addHours } from 'date-fns';
 import { Modal } from './Modal';
 
@@ -25,17 +25,21 @@ export const BookingForm = ({ resource, onClose, onSuccess }: BookingFormProps) 
   const [branch, setBranch] = useState(resource.current_booking?.branch || '');
   const [notes, setNotes] = useState(resource.current_booking?.notes || '');
   const [buildLink, setBuildLink] = useState(resource.current_booking?.build_link || '');
-  const [expiresAt, setExpiresAt] = useState<Date>(
+  const [expiresAt, setExpiresAt] = useState<Date | null>(
     resource.current_booking?.expires_at
       ? new Date(resource.current_booking.expires_at)
-      : addHours(new Date(), 4)
+      : null
   );
-
-  const presets = getExpiryPresets();
+  const [selectedPresetKey, setSelectedPresetKey] = useState<'1h' | '2h' | '4h' | 'eod' | null>(null);
 
   const handleBook = async () => {
     if (!bookedBy.trim()) {
       setError('Your name/team is required');
+      return;
+    }
+
+    if (!expiresAt) {
+      setError('Expiry time is required');
       return;
     }
 
@@ -162,6 +166,11 @@ export const BookingForm = ({ resource, onClose, onSuccess }: BookingFormProps) 
     try {
       setLoading(true);
       setError(null);
+
+       if (!expiresAt) {
+        setError('Expiry time is required');
+        return;
+      }
 
       // Update booking
       await supabase
@@ -382,13 +391,18 @@ export const BookingForm = ({ resource, onClose, onSuccess }: BookingFormProps) 
                   Expiry Time <span className="text-red-500">*</span>
                 </label>
                 <div className="mt-2 grid grid-cols-4 gap-2">
-                  {Object.entries(presets).map(([key, date]) => (
+                  {(['1h', '2h', '4h', 'eod'] as const).map((key) => (
                     <button
                       key={key}
                       type="button"
-                      onClick={() => setExpiresAt(date)}
+                      onClick={() => {
+                        const presets = getExpiryPresets();
+                        const date = presets[key];
+                        setExpiresAt(date);
+                        setSelectedPresetKey(key);
+                      }}
                       className={`px-3 py-2 text-sm font-medium rounded-md ${
-                        expiresAt.getTime() === date.getTime()
+                        selectedPresetKey === key
                           ? 'bg-blue-600 text-white'
                           : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                       }`}
@@ -402,8 +416,16 @@ export const BookingForm = ({ resource, onClose, onSuccess }: BookingFormProps) 
                 </div>
                 <input
                   type="datetime-local"
-                  value={expiresAt.toISOString().slice(0, 16)}
-                  onChange={(e) => setExpiresAt(new Date(e.target.value))}
+                  value={expiresAt ? toLocalDateTimeInputValue(expiresAt) : ''}
+                  onChange={(e) => {
+                    if (!e.target.value) {
+                      setExpiresAt(null);
+                      setSelectedPresetKey(null);
+                    } else {
+                      setExpiresAt(new Date(e.target.value));
+                      setSelectedPresetKey(null);
+                    }
+                  }}
                   className="mt-2 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                 />
               </div>
@@ -457,21 +479,21 @@ export const BookingForm = ({ resource, onClose, onSuccess }: BookingFormProps) 
                 <div className="mt-2 grid grid-cols-3 gap-2">
                   <button
                     type="button"
-                    onClick={() => setExpiresAt(addHours(new Date(resource.current_booking!.expires_at), 1))}
+                    onClick={() => setExpiresAt((prev) => addHours(prev ?? new Date(), 1))}
                     className="px-3 py-2 text-sm font-medium rounded-md bg-gray-100 text-gray-700 hover:bg-gray-200"
                   >
                     +1h
                   </button>
                   <button
                     type="button"
-                    onClick={() => setExpiresAt(addHours(new Date(resource.current_booking!.expires_at), 2))}
+                    onClick={() => setExpiresAt((prev) => addHours(prev ?? new Date(), 2))}
                     className="px-3 py-2 text-sm font-medium rounded-md bg-gray-100 text-gray-700 hover:bg-gray-200"
                   >
                     +2h
                   </button>
                   <button
                     type="button"
-                    onClick={() => setExpiresAt(addHours(new Date(resource.current_booking!.expires_at), 4))}
+                    onClick={() => setExpiresAt((prev) => addHours(prev ?? new Date(), 4))}
                     className="px-3 py-2 text-sm font-medium rounded-md bg-gray-100 text-gray-700 hover:bg-gray-200"
                   >
                     +4h
@@ -483,8 +505,14 @@ export const BookingForm = ({ resource, onClose, onSuccess }: BookingFormProps) 
                 <label className="block text-sm font-medium text-gray-700">Or Select New Expiry</label>
                 <input
                   type="datetime-local"
-                  value={expiresAt.toISOString().slice(0, 16)}
-                  onChange={(e) => setExpiresAt(new Date(e.target.value))}
+                  value={expiresAt ? toLocalDateTimeInputValue(expiresAt) : ''}
+                  onChange={(e) => {
+                    if (!e.target.value) {
+                      setExpiresAt(null);
+                    } else {
+                      setExpiresAt(new Date(e.target.value));
+                    }
+                  }}
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                 />
               </div>

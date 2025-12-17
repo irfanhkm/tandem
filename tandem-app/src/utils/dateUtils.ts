@@ -10,6 +10,11 @@ export const getExpiryPresets = () => {
   };
 };
 
+// Format a Date for use in <input type="datetime-local"> (always local time)
+export const toLocalDateTimeInputValue = (date: Date): string => {
+  return format(date, "yyyy-MM-dd'T'HH:mm");
+};
+
 export const formatDateTime = (date: string | Date): string => {
   return format(new Date(date), 'MMM dd, yyyy h:mm a');
 };
@@ -26,8 +31,11 @@ export const isExpired = (date: string | Date): boolean => {
   return isPast(new Date(date));
 };
 
-export const getTimeUntilExpiry = (expiryDate: string | Date): string => {
-  const now = new Date();
+export const getTimeUntilExpiry = (
+  expiryDate: string | Date,
+  from: Date = new Date()
+): string => {
+  const now = from;
   const expiry = new Date(expiryDate);
   const diff = expiry.getTime() - now.getTime();
 

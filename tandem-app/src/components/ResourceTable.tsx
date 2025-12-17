@@ -1,5 +1,8 @@
+'use client';
+
+import { useEffect, useState } from 'react';
 import type { Resource } from '../types';
-import { formatDateTime } from '../utils/dateUtils';
+import { formatDateTime, getTimeUntilExpiry, isExpired } from '../utils/dateUtils';
 
 interface ResourceTableProps {
   resources: Resource[];
@@ -7,6 +10,17 @@ interface ResourceTableProps {
 }
 
 export const ResourceTable = ({ resources, onResourceClick }: ResourceTableProps) => {
+  // Tick every minute so countdowns stay up to date
+  const [now, setNow] = useState<Date>(new Date());
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setNow(new Date());
+    }, 60_000); // update every minute
+
+    return () => clearInterval(interval);
+  }, []);
+
   return (
     <div className="bg-white shadow overflow-hidden sm:rounded-lg">
       <table className="min-w-full divide-y divide-gray-200">
@@ -96,11 +110,22 @@ export const ResourceTable = ({ resources, onResourceClick }: ResourceTableProps
                 </div>
               </td>
               <td className="px-6 py-4 whitespace-nowrap">
-                <div className="text-sm text-gray-900">
-                  {resource.current_booking?.expires_at
-                    ? formatDateTime(resource.current_booking.expires_at)
-                    : '-'}
-                </div>
+                {resource.current_booking?.expires_at ? (
+                  <div className="text-sm text-gray-900">
+                    <div>{formatDateTime(resource.current_booking.expires_at)}</div>
+                    <div
+                      className={`text-xs ${
+                        isExpired(resource.current_booking.expires_at)
+                          ? 'text-red-600'
+                          : 'text-gray-500'
+                      }`}
+                    >
+                      {getTimeUntilExpiry(resource.current_booking.expires_at, now)} left
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-sm text-gray-900">-</div>
+                )}
               </td>
               <td className="px-6 py-4 whitespace-nowrap">
                 <div className="text-sm text-gray-500">
