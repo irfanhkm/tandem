@@ -8,6 +8,8 @@ import { Modal } from '@/components/Modal';
 import IntegrationSettings from '@/components/IntegrationSettings';
 import { GCPCloudBuildIntegration } from '@/lib/gcpService';
 
+const ADMIN_PASSWORD = process.env.NEXT_PUBLIC_ADMIN_PASSWORD || 'tandem-admin';
+
 export default function Admin() {
   const [resources, setResources] = useState<Resource[]>([]);
   const [loading, setLoading] = useState(false);
@@ -20,8 +22,13 @@ export default function Admin() {
   });
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [isAuthorized, setIsAuthorized] = useState(false);
+  const [password, setPassword] = useState('');
+  const [authError, setAuthError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!isAuthorized) return;
+
     fetchResources();
 
     // Subscribe to realtime changes
@@ -39,7 +46,7 @@ export default function Admin() {
     return () => {
       supabase.removeChannel(resourcesChannel);
     };
-  }, []);
+  }, [isAuthorized]);
 
   const fetchResources = async () => {
     try {
@@ -57,6 +64,18 @@ export default function Admin() {
       setError(err.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleAuthSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (password === ADMIN_PASSWORD) {
+      setIsAuthorized(true);
+      setAuthError(null);
+      setPassword('');
+    } else {
+      setAuthError('Incorrect password');
     }
   };
 
@@ -197,80 +216,121 @@ export default function Admin() {
     <div className="min-h-screen bg-gray-50">
       <Header />
 
-      <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        <div className="px-4 sm:px-0">
-          {/* Header */}
-          <div className="flex justify-between items-center mb-6">
-            <h1 className="text-2xl font-bold text-gray-900">Admin Panel - Resources</h1>
-            <div className="flex space-x-2">
-              {!showForm && !showIntegrations && (
-                <>
-                  {/* <button
-                    onClick={() => setShowIntegrations(!showIntegrations)}
-                    className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                  >
-                    ⚙️ Integrations
-                  </button> */}
-                  <button
-                    onClick={() => setShowForm(true)}
-                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                  >
-                    + Add Resource
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
+      {!isAuthorized ? (
+        <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+          <div className="px-4 sm:px-0 max-w-md mx-auto">
+            <h1 className="text-2xl font-bold text-gray-900 mb-4">Admin Access</h1>
+            <p className="text-sm text-gray-600 mb-4">
+              This area is restricted. Please enter the admin password to continue.
+            </p>
 
-          {/* Integrations Section - Hidden */}
-          {/* {showIntegrations && (
-            <div className="mb-6">
-              <div className="flex justify-between items-center mb-4">
-                <div>
-                  <h2 className="text-lg font-semibold text-gray-900">External Integrations</h2>
-                  <p className="text-sm text-gray-600">
-                    Connect external services to automatically sync resources
-                  </p>
-                </div>
-                <button
-                  onClick={() => setShowIntegrations(false)}
-                  className="text-gray-500 hover:text-gray-700"
-                >
-                  ✕ Close
-                </button>
-              </div>
-
-              <div className="space-y-4">
-                <IntegrationSettings
-                  provider={GCPCloudBuildIntegration}
-                  onSyncComplete={(result) => {
-                    if (result.success > 0) {
-                      fetchResources();
-                    }
+            <form onSubmit={handleAuthSubmit} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  Admin Password
+                </label>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    if (authError) setAuthError(null);
                   }}
-                  onConfigChange={() => {
-                    // Optionally refresh or update UI
-                  }}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                  autoComplete="off"
                 />
               </div>
-            </div>
-          )} */}
 
-          {error && (
-            <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
-              {error}
-            </div>
-          )}
+              {authError && (
+                <p className="text-sm text-red-600">
+                  {authError}
+                </p>
+              )}
 
-          {/* Form Modal */}
-          <Modal
-            isOpen={showForm}
-            onClose={handleCancel}
-            title={editingResource ? 'Edit Resource' : 'Add New Resource'}
-            subtitle="Manage resource name and labels"
-            maxWidth="lg"
-          >
-            <form onSubmit={handleSubmit} className="space-y-4">
+              <button
+                type="submit"
+                className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              >
+                Enter
+              </button>
+            </form>
+          </div>
+        </main>
+      ) : (
+        <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+          <div className="px-4 sm:px-0">
+            {/* Header */}
+            <div className="flex justify-between items-center mb-6">
+              <h1 className="text-2xl font-bold text-gray-900">Admin Panel - Resources</h1>
+              <div className="flex space-x-2">
+                {!showForm && !showIntegrations && (
+                  <>
+                    {/* <button
+                      onClick={() => setShowIntegrations(!showIntegrations)}
+                      className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                    >
+                      ⚙️ Integrations
+                    </button> */}
+                    <button
+                      onClick={() => setShowForm(true)}
+                      className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                    >
+                      + Add Resource
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Integrations Section - Hidden */}
+            {/* {showIntegrations && (
+              <div className="mb-6">
+                <div className="flex justify-between items-center mb-4">
+                  <div>
+                    <h2 className="text-lg font-semibold text-gray-900">External Integrations</h2>
+                    <p className="text-sm text-gray-600">
+                      Connect external services to automatically sync resources
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setShowIntegrations(false)}
+                    className="text-gray-500 hover:text-gray-700"
+                  >
+                    ✕ Close
+                  </button>
+                </div>
+
+                <div className="space-y-4">
+                  <IntegrationSettings
+                    provider={GCPCloudBuildIntegration}
+                    onSyncComplete={(result) => {
+                      if (result.success > 0) {
+                        fetchResources();
+                      }
+                    }}
+                    onConfigChange={() => {
+                      // Optionally refresh or update UI
+                    }}
+                  />
+                </div>
+              </div>
+            )} */}
+
+            {error && (
+              <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+                {error}
+              </div>
+            )}
+
+            {/* Form Modal */}
+            <Modal
+              isOpen={showForm}
+              onClose={handleCancel}
+              title={editingResource ? 'Edit Resource' : 'Add New Resource'}
+              subtitle="Manage resource name and labels"
+              maxWidth="lg"
+            >
+              <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700">
                     Resource Name <span className="text-red-500">*</span>
@@ -319,90 +379,91 @@ export default function Admin() {
                   </button>
                 </div>
               </form>
-          </Modal>
+            </Modal>
 
-              {/* Resources Table */}
-              <div className="bg-white shadow overflow-hidden sm:rounded-lg">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
+            {/* Resources Table */}
+            <div className="bg-white shadow overflow-hidden sm:rounded-lg">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th
+                      scope="col"
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                    >
+                      Resource Name
+                    </th>
+                    <th
+                      scope="col"
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                    >
+                      Labels
+                    </th>
+                    <th
+                      scope="col"
+                      className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider"
+                    >
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {loading ? (
                     <tr>
-                      <th
-                        scope="col"
-                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                      >
-                        Resource Name
-                      </th>
-                      <th
-                        scope="col"
-                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                      >
-                        Labels
-                      </th>
-                      <th
-                        scope="col"
-                        className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider"
-                      >
-                        Actions
-                      </th>
+                      <td colSpan={3} className="px-6 py-4 text-center">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {loading ? (
-                      <tr>
-                        <td colSpan={3} className="px-6 py-4 text-center">
-                          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                  ) : resources.length === 0 ? (
+                    <tr>
+                      <td colSpan={3} className="px-6 py-4 text-center text-sm text-gray-500">
+                        No resources found. Add your first resource!
+                      </td>
+                    </tr>
+                  ) : (
+                    resources.map((resource) => (
+                      <tr key={resource.id}>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm font-medium text-gray-900">{resource.name}</div>
+                        </td>
+                        <td className="px-6 py-4">
+                          {resource.labels ? (
+                            <div className="flex flex-wrap gap-1">
+                              {resource.labels.split(',').map((label, idx) => (
+                                <span
+                                  key={idx}
+                                  className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800"
+                                >
+                                  {label.trim()}
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-sm text-gray-400">No labels</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                          <button
+                            onClick={() => handleEdit(resource)}
+                            className="text-blue-600 hover:text-blue-900 mr-4"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => handleDelete(resource)}
+                            className="text-red-600 hover:text-red-900"
+                          >
+                            Delete
+                          </button>
                         </td>
                       </tr>
-                    ) : resources.length === 0 ? (
-                      <tr>
-                        <td colSpan={3} className="px-6 py-4 text-center text-sm text-gray-500">
-                          No resources found. Add your first resource!
-                        </td>
-                      </tr>
-                    ) : (
-                      resources.map((resource) => (
-                        <tr key={resource.id}>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm font-medium text-gray-900">{resource.name}</div>
-                          </td>
-                          <td className="px-6 py-4">
-                            {resource.labels ? (
-                              <div className="flex flex-wrap gap-1">
-                                {resource.labels.split(',').map((label, idx) => (
-                                  <span
-                                    key={idx}
-                                    className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800"
-                                  >
-                                    {label.trim()}
-                                  </span>
-                                ))}
-                              </div>
-                            ) : (
-                              <span className="text-sm text-gray-400">No labels</span>
-                            )}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                            <button
-                              onClick={() => handleEdit(resource)}
-                              className="text-blue-600 hover:text-blue-900 mr-4"
-                            >
-                              Edit
-                            </button>
-                            <button
-                              onClick={() => handleDelete(resource)}
-                              className="text-red-600 hover:text-red-900"
-                            >
-                              Delete
-                            </button>
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-        </div>
-      </main>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </main>
+      )}
     </div>
   );
 }
